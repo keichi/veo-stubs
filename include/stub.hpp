@@ -1,10 +1,14 @@
 #ifndef __STUB_HPP__
 #define __STUB_HPP__
 
+#include <mutex>
+#include <thread>
 #include <unistd.h>
+#include <unordered_map>
 #include <vector>
 
 #include <nlohmann/json.hpp>
+#include <readerwriterqueue.h>
 
 using json = nlohmann::json;
 
@@ -34,12 +38,23 @@ enum veo_stubs_arg_type {
 struct veo_proc_handle {
     pid_t pid;
     struct veo_thr_ctxt *default_context;
-    std::vector<struct veo_thr_ctxt *> contexts;
+    std::vector<veo_thr_ctxt *> contexts;
+
+    veo_proc_handle(pid_t pid) : pid(pid) {}
 };
 
 struct veo_thr_ctxt {
     struct veo_proc_handle *proc;
     int sock;
+    moodycamel::BlockingReaderWriterQueue<json> cmd_queue;
+    moodycamel::BlockingReaderWriterQueue<json> comp_queue;
+    std::thread comm_thread;
+    uint64_t reqid;
+
+    veo_thr_ctxt(struct veo_proc_handle *proc, int sock)
+        : proc(proc), sock(sock), reqid(0)
+    {
+    }
 };
 
 struct veo_arg {

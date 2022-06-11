@@ -20,6 +20,7 @@ target_link_libraries(stub-veorun PRIVATE readerwriterqueue)
 
 add_library(veo SHARED src/libveo.cpp)
 target_link_libraries(veo PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(veo PRIVATE readerwriterqueue)
 
 add_executable(hello test/hello.c)
 target_link_libraries(hello PRIVATE veo)

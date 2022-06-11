@@ -10,39 +10,41 @@
 
 #include "stub.hpp"
 
-static void handle_load_library(int sock, json msg)
+static void handle_load_library(int sock, json req)
 {
-    std::string libname = msg["libname"];
+    std::string libname = req["libname"];
 
     void *libhdl = dlopen(libname.c_str(), RTLD_LAZY);
 
-    send_msg(sock, {{"handle", reinterpret_cast<uint64_t>(libhdl)}});
+    send_msg(sock, {{"handle", reinterpret_cast<uint64_t>(libhdl)},
+                    {"reqid", req["reqid"]}});
 }
 
-static void handle_unload_library(int sock, json msg)
+static void handle_unload_library(int sock, json req)
 {
-    void *libhdl = reinterpret_cast<void *>((msg["libhdl"].get<uint64_t>()));
+    void *libhdl = reinterpret_cast<void *>((req["libhdl"].get<uint64_t>()));
 
     int32_t result = dlclose(libhdl);
 
-    send_msg(sock, {{"result", result}});
+    send_msg(sock, {{"result", result}, {"reqid", req["reqid"]}});
 }
 
-static void handle_get_sym(int sock, json msg)
+static void handle_get_sym(int sock, json req)
 {
-    void *libhdl = reinterpret_cast<void *>((msg["libhdl"].get<uint64_t>()));
-    std::string symname = msg["symname"];
+    void *libhdl = reinterpret_cast<void *>((req["libhdl"].get<uint64_t>()));
+    std::string symname = req["symname"];
 
     void *fn = dlsym(libhdl, symname.c_str());
 
-    send_msg(sock, {{"addr", reinterpret_cast<uint64_t>(fn)}});
+    send_msg(sock, {{"address", reinterpret_cast<uint64_t>(fn)},
+                    {"reqid", req["reqid"]}});
 }
 
-static void handle_call_async(int sock, json msg)
+static void handle_call_async(int sock, json req)
 {
-    void *libhdl = reinterpret_cast<void *>((msg["libhdl"].get<uint64_t>()));
-    std::string symname = msg["symname"];
-    struct veo_args args = msg["args"];
+    void *libhdl = reinterpret_cast<void *>((req["libhdl"].get<uint64_t>()));
+    std::string symname = req["symname"];
+    struct veo_args args = req["args"];
 
     ffi_cif cif;
     std::vector<ffi_type *> arg_types;
@@ -100,42 +102,41 @@ static void handle_call_async(int sock, json msg)
     uint64_t res;
     ffi_call(&cif, FFI_FN(fn), &res, arg_values.data());
 
-    uint64_t reqid = 0;
-    send_msg(sock, {{"reqid", reqid}});
+    send_msg(sock, {{"result", res}, {"reqid", req["reqid"]}});
 }
 
-static void handle_quit(int sock, json msg) {}
+static void handle_quit(int sock, json req) {}
 
 static void worker(int server_sock, int worker_sock)
 {
     bool active = true;
 
-    std::cout << "[VE] starting up worker " << std::this_thread::get_id()
+    std::cout << "[VE] starting up worker thread " << std::this_thread::get_id()
               << std::endl;
 
     while (active) {
-        json msg = recv_msg(worker_sock);
+        json req = recv_msg(worker_sock);
 
-        std::cout << "[VE] received " << msg << std::endl;
+        std::cout << "[VE] received " << req << std::endl;
 
-        switch (msg["cmd"].get<int32_t>()) {
+        switch (req["cmd"].get<int32_t>()) {
         case VEO_STUBS_CMD_LOAD_LIBRARY:
-            handle_load_library(worker_sock, msg);
+            handle_load_library(worker_sock, req);
             break;
         case VEO_STUBS_CMD_UNLOAD_LIBRARY:
-            handle_unload_library(worker_sock, msg);
+            handle_unload_library(worker_sock, req);
             break;
         case VEO_STUBS_CMD_GET_SYM:
-            handle_get_sym(worker_sock, msg);
+            handle_get_sym(worker_sock, req);
             break;
         case VEO_STUBS_CMD_CALL_ASYNC:
-            handle_call_async(worker_sock, msg);
+            handle_call_async(worker_sock, req);
             break;
         case VEO_STUBS_CMD_CLOSE_CONTEXT:
             active = false;
             break;
         case VEO_STUBS_CMD_QUIT:
-            handle_quit(worker_sock, msg);
+            handle_quit(worker_sock, req);
             active = false;
             close(server_sock);
             break;
@@ -146,8 +147,8 @@ static void worker(int server_sock, int worker_sock)
 
     close(worker_sock);
 
-    std::cout << "[VE] shutting down worker " << std::this_thread::get_id()
-              << std::endl;
+    std::cout << "[VE] shutting down worker thread "
+              << std::this_thread::get_id() << std::endl;
 }
 
 int main(int argc, char *argv[])
