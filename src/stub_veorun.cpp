@@ -2,11 +2,11 @@
 #include <iostream>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <thread>
 #include <unistd.h>
 #include <vector>
 
 #include <ffi.h>
-#include <readerwriterqueue.h>
 
 #include "stub.hpp"
 
@@ -96,7 +96,41 @@ static void handle_call_async(int sock, json msg)
 
 static void handle_quit(int sock, json msg) {}
 
-moodycamel::BlockingReaderWriterQueue<int> cmd_queue;
+static void worker(int server_sock, int worker_sock)
+{
+    bool active = true;
+
+    std::cout << "[VE] starting up worker" << std::endl;
+
+    while (active) {
+        json msg = recv_msg(worker_sock);
+
+        std::cout << "[VE] received: " << msg << std::endl;
+
+        switch (msg["cmd"].get<int32_t>()) {
+        case VEO_STUBS_CMD_LOAD_LIBRARY:
+            handle_load_library(worker_sock, msg);
+            break;
+        case VEO_STUBS_CMD_UNLOAD_LIBRARY:
+            handle_unload_library(worker_sock, msg);
+            break;
+        case VEO_STUBS_CMD_CALL_ASYNC:
+            handle_call_async(worker_sock, msg);
+            break;
+        case VEO_STUBS_CMD_QUIT:
+            handle_quit(worker_sock, msg);
+            active = false;
+            close(server_sock);
+            break;
+        default:
+            break;
+        }
+    }
+
+    close(worker_sock);
+
+    std::cout << "[VE] shutting down worker" << std::endl;
+}
 
 int main(int argc, char *argv[])
 {
@@ -106,49 +140,37 @@ int main(int argc, char *argv[])
     server_addr.sun_family = AF_LOCAL;
     strcpy(server_addr.sun_path, "/tmp/stub-veorun.sock");
 
-    int sock = socket(AF_LOCAL, SOCK_STREAM, 0);
+    int server_sock = socket(AF_LOCAL, SOCK_STREAM, 0);
 
     unlink("/tmp/stub-veorun.sock");
 
-    if (bind(sock, reinterpret_cast<struct sockaddr *>(&server_addr),
+    if (bind(server_sock, reinterpret_cast<struct sockaddr *>(&server_addr),
              SUN_LEN(&server_addr)) == -1) {
         std::cout << "[VE] bind() failed" << std::endl;
     }
 
-    if (listen(sock, 32) == -1) {
+    if (listen(server_sock, 32) == -1) {
         std::cout << "[VE] listen() failed" << std::endl;
     }
 
-    int sock2 = accept(sock, NULL, NULL);
+    std::vector<std::thread> worker_threads;
 
-    bool active = true;
+    while (true) {
+        int worker_sock = accept(server_sock, NULL, NULL);
 
-    while (active) {
-        json msg = recv_msg(sock2);
-
-        std::cout << msg << std::endl;
-
-        switch (msg["cmd"].get<int32_t>()) {
-        case VEO_STUBS_CMD_LOAD_LIBRARY:
-            handle_load_library(sock2, msg);
-            break;
-        case VEO_STUBS_CMD_UNLOAD_LIBRARY:
-            handle_unload_library(sock2, msg);
-            break;
-        case VEO_STUBS_CMD_CALL_ASYNC:
-            handle_call_async(sock2, msg);
-            break;
-        case VEO_STUBS_CMD_QUIT:
-            handle_quit(sock2, msg);
-            active = false;
-            break;
-        default:
+        if (worker_sock == -1) {
+            std::cout << "[VE] shutting down server" << std::endl;
             break;
         }
+
+        worker_threads.emplace_back(worker, server_sock, worker_sock);
     }
 
-    close(sock);
-    close(sock2);
+    for (auto &thread : worker_threads) {
+        thread.join();
+    }
+
+    std::cout << "[VE] exiting" << std::endl;
 
     return 0;
 }

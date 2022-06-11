@@ -32,11 +32,14 @@ enum veo_stubs_arg_type {
 
 struct veo_proc_handle {
     pid_t pid;
-    int sock;
+
+    struct veo_thr_ctxt *default_context;
+    std::vector<struct veo_thr_ctxt *> contexts;
 };
 
 struct veo_thr_ctxt {
     struct veo_proc_handle *proc;
+    int sock;
 };
 
 struct veo_arg {
@@ -60,8 +63,7 @@ struct veo_args {
     std::vector<veo_arg> args;
 };
 
-
-void to_json(json& j, const veo_args& args)
+void to_json(json &j, const veo_args &args)
 {
     j = json::array();
 
@@ -101,7 +103,7 @@ void to_json(json& j, const veo_args& args)
     }
 }
 
-void from_json(const json& j, veo_args& args)
+void from_json(const json &j, veo_args &args)
 {
     args.args.clear();
 
@@ -174,14 +176,14 @@ void send_msg(int sock, const json &msg)
     std::vector<std::uint8_t> buffer = json::to_msgpack(msg);
     uint32_t size = buffer.size();
 
-    write_all(sock, reinterpret_cast<uint8_t*>(&size), sizeof(size));
+    write_all(sock, reinterpret_cast<uint8_t *>(&size), sizeof(size));
     write_all(sock, buffer.data(), size);
 }
 
 json recv_msg(int sock)
 {
     uint32_t size;
-    read_all(sock, reinterpret_cast<uint8_t*>(&size), sizeof(size));
+    read_all(sock, reinterpret_cast<uint8_t *>(&size), sizeof(size));
 
     std::vector<std::uint8_t> buffer(size);
     read_all(sock, buffer.data(), size);
