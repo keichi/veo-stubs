@@ -14,18 +14,28 @@ static void handle_load_library(int sock, json msg)
 {
     std::string libname = msg["libname"];
 
-    void *handle = dlopen(libname.c_str(), RTLD_LAZY);
+    void *libhdl = dlopen(libname.c_str(), RTLD_LAZY);
 
-    send_msg(sock, {{"handle", reinterpret_cast<uint64_t>(handle)}});
+    send_msg(sock, {{"handle", reinterpret_cast<uint64_t>(libhdl)}});
 }
 
 static void handle_unload_library(int sock, json msg)
 {
-    void *handle = reinterpret_cast<void *>((msg["libhdl"].get<uint64_t>()));
+    void *libhdl = reinterpret_cast<void *>((msg["libhdl"].get<uint64_t>()));
 
-    int32_t result = dlclose(handle);
+    int32_t result = dlclose(libhdl);
 
     send_msg(sock, {{"result", result}});
+}
+
+static void handle_get_sym(int sock, json msg)
+{
+    void *libhdl = reinterpret_cast<void *>((msg["libhdl"].get<uint64_t>()));
+    std::string symname = msg["symname"];
+
+    void *fn = dlsym(libhdl, symname.c_str());
+
+    send_msg(sock, {{"addr", reinterpret_cast<uint64_t>(fn)}});
 }
 
 static void handle_call_async(int sock, json msg)
@@ -114,6 +124,9 @@ static void worker(int server_sock, int worker_sock)
             break;
         case VEO_STUBS_CMD_UNLOAD_LIBRARY:
             handle_unload_library(worker_sock, msg);
+            break;
+        case VEO_STUBS_CMD_GET_SYM:
+            handle_get_sym(worker_sock, msg);
             break;
         case VEO_STUBS_CMD_CALL_ASYNC:
             handle_call_async(worker_sock, msg);

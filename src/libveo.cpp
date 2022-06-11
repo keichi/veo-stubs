@@ -78,6 +78,18 @@ int veo_unload_library(veo_proc_handle *proc, const uint64_t libhdl)
     return msg["result"];
 }
 
+uint64_t veo_get_sym(struct veo_proc_handle *proc, uint64_t libhdl,
+                     const char *symname)
+{
+    send_msg(proc->default_context->sock, {{"cmd", VEO_STUBS_CMD_GET_SYM},
+                                           {"libhdl", libhdl},
+                                           {"symname", symname}});
+
+    json msg = recv_msg(proc->default_context->sock);
+
+    return msg["handle"];
+}
+
 struct veo_thr_ctxt *veo_context_open(struct veo_proc_handle *proc)
 {
     if (proc->contexts.empty()) {

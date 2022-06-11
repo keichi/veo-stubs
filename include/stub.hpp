@@ -11,6 +11,7 @@ using json = nlohmann::json;
 enum veo_stubs_cmd {
     VEO_STUBS_CMD_LOAD_LIBRARY,
     VEO_STUBS_CMD_UNLOAD_LIBRARY,
+    VEO_STUBS_CMD_GET_SYM,
     VEO_STUBS_CMD_CALL_ASYNC,
     VEO_STUBS_CMD_OPEN_CONTEXT,
     VEO_STUBS_CMD_CLOSE_CONTEXT,
@@ -32,7 +33,6 @@ enum veo_stubs_arg_type {
 
 struct veo_proc_handle {
     pid_t pid;
-
     struct veo_thr_ctxt *default_context;
     std::vector<struct veo_thr_ctxt *> contexts;
 };
