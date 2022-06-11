@@ -100,12 +100,13 @@ static void worker(int server_sock, int worker_sock)
 {
     bool active = true;
 
-    std::cout << "[VE] starting up worker" << std::endl;
+    std::cout << "[VE] starting up worker " << std::this_thread::get_id()
+              << std::endl;
 
     while (active) {
         json msg = recv_msg(worker_sock);
 
-        std::cout << "[VE] received: " << msg << std::endl;
+        std::cout << "[VE] received " << msg << std::endl;
 
         switch (msg["cmd"].get<int32_t>()) {
         case VEO_STUBS_CMD_LOAD_LIBRARY:
@@ -116,6 +117,9 @@ static void worker(int server_sock, int worker_sock)
             break;
         case VEO_STUBS_CMD_CALL_ASYNC:
             handle_call_async(worker_sock, msg);
+            break;
+        case VEO_STUBS_CMD_CLOSE_CONTEXT:
+            active = false;
             break;
         case VEO_STUBS_CMD_QUIT:
             handle_quit(worker_sock, msg);
@@ -129,7 +133,8 @@ static void worker(int server_sock, int worker_sock)
 
     close(worker_sock);
 
-    std::cout << "[VE] shutting down worker" << std::endl;
+    std::cout << "[VE] shutting down worker " << std::this_thread::get_id()
+              << std::endl;
 }
 
 int main(int argc, char *argv[])

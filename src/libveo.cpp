@@ -81,6 +81,7 @@ int veo_unload_library(veo_proc_handle *proc, const uint64_t libhdl)
 struct veo_thr_ctxt *veo_context_open(struct veo_proc_handle *proc)
 {
     if (proc->contexts.empty()) {
+        proc->contexts.push_back(proc->default_context);
         return proc->default_context;
     }
 
@@ -92,12 +93,35 @@ struct veo_thr_ctxt *veo_context_open(struct veo_proc_handle *proc)
 
 int veo_context_close(struct veo_thr_ctxt *ctx)
 {
+    std::vector<veo_thr_ctxt *>::iterator it =
+        std::find(ctx->proc->contexts.begin(), ctx->proc->contexts.end(), ctx);
+
+    if (it != ctx->proc->contexts.end()) {
+        ctx->proc->contexts.erase(it);
+    }
+
     if (ctx == ctx->proc->default_context) {
         return 0;
     }
 
+    send_msg(ctx->sock, {{"cmd", VEO_STUBS_CMD_CLOSE_CONTEXT}});
+
     delete ctx;
     return 0;
+}
+
+int veo_num_contexts(struct veo_proc_handle *proc)
+{
+    return proc->contexts.size();
+}
+
+struct veo_thr_ctxt *veo_get_context(struct veo_proc_handle *proc, int idx)
+{
+    if (idx >= proc->contexts.size()) {
+        return NULL;
+    }
+
+    return proc->contexts[idx];
 }
 
 struct veo_args *veo_args_alloc(void) { return new veo_args; }
