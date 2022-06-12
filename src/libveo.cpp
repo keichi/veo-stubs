@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "stub.hpp"
+#include "ve_offload.h"
 
 extern "C" {
 
@@ -15,7 +16,7 @@ static void worker(struct veo_thr_ctxt *ctx)
     json cmd, res;
 
     while (true) {
-        ctx->cmd_queue.wait_dequeue(cmd);
+        ctx->requests.wait_dequeue(cmd);
 
         std::cout << "[VH] sending command " << cmd << std::endl;
 
@@ -30,7 +31,13 @@ static void worker(struct veo_thr_ctxt *ctx)
 
         std::cout << "[VH] received result " << res << std::endl;
 
-        ctx->comp_queue.enqueue(res);
+        {
+            std::lock_guard<std::mutex> lock(ctx->results_mtx);
+
+            uint64_t reqid = res["reqid"], result = res["result"];
+            ctx->results.insert({reqid, result});
+            ctx->results_cv.notify_all();
+        }
     }
 }
 
@@ -76,7 +83,7 @@ struct veo_proc_handle *veo_proc_create(int venode)
 
 int veo_proc_destroy(struct veo_proc_handle *proc)
 {
-    proc->default_context->cmd_queue.enqueue({{"cmd", VEO_STUBS_CMD_QUIT}});
+    proc->default_context->submit_request({{"cmd", VEO_STUBS_CMD_QUIT}});
 
     std::cout << "[VH] Waiting for VE to quit" << std::endl;
 
@@ -88,43 +95,40 @@ int veo_proc_destroy(struct veo_proc_handle *proc)
 
 uint64_t veo_load_library(struct veo_proc_handle *proc, const char *libname)
 {
-    proc->default_context->cmd_queue.enqueue(
-        {{"cmd", VEO_STUBS_CMD_LOAD_LIBRARY},
-         {"reqid", proc->default_context->reqid++},
-         {"libname", libname}});
+    struct veo_thr_ctxt *ctx = proc->default_context;
+    uint64_t reqid = ctx->issue_reqid();
 
-    json res;
-    proc->default_context->comp_queue.wait_dequeue(res);
+    ctx->submit_request({{"cmd", VEO_STUBS_CMD_LOAD_LIBRARY},
+                         {"reqid", reqid},
+                         {"libname", libname}});
 
-    return res["handle"];
+    return ctx->wait_for_result(reqid);
 }
 
 int veo_unload_library(veo_proc_handle *proc, const uint64_t libhdl)
 {
-    proc->default_context->cmd_queue.enqueue(
-        {{"cmd", VEO_STUBS_CMD_UNLOAD_LIBRARY},
-         {"reqid", proc->default_context->reqid++},
-         {"libhdl", libhdl}});
+    struct veo_thr_ctxt *ctx = proc->default_context;
+    uint64_t reqid = ctx->issue_reqid();
 
-    json res;
-    proc->default_context->comp_queue.wait_dequeue(res);
+    ctx->submit_request({{"cmd", VEO_STUBS_CMD_UNLOAD_LIBRARY},
+                         {"reqid", reqid},
+                         {"libhdl", libhdl}});
 
-    return res["result"];
+    return ctx->wait_for_result(reqid);
 }
 
 uint64_t veo_get_sym(struct veo_proc_handle *proc, uint64_t libhdl,
                      const char *symname)
 {
-    proc->default_context->cmd_queue.enqueue(
-        {{"cmd", VEO_STUBS_CMD_GET_SYM},
-         {"reqid", proc->default_context->reqid++},
-         {"libhdl", libhdl},
-         {"symname", symname}});
+    struct veo_thr_ctxt *ctx = proc->default_context;
+    uint64_t reqid = ctx->issue_reqid();
 
-    json res;
-    proc->default_context->comp_queue.wait_dequeue(res);
+    ctx->submit_request({{"cmd", VEO_STUBS_CMD_GET_SYM},
+                         {"reqid", reqid},
+                         {"libhdl", libhdl},
+                         {"symname", symname}});
 
-    return res["address"];
+    return ctx->wait_for_result(reqid);
 }
 
 struct veo_thr_ctxt *veo_context_open(struct veo_proc_handle *proc)
@@ -154,8 +158,8 @@ int veo_context_close(struct veo_thr_ctxt *ctx)
         return 0;
     }
 
-    ctx->cmd_queue.enqueue(
-        {{"cmd", VEO_STUBS_CMD_CLOSE_CONTEXT}, {"reqid", ctx->reqid++}});
+    ctx->submit_request(
+        {{"cmd", VEO_STUBS_CMD_CLOSE_CONTEXT}, {"reqid", ctx->issue_reqid()}});
 
     delete ctx;
     return 0;
@@ -164,13 +168,13 @@ int veo_context_close(struct veo_thr_ctxt *ctx)
 uint64_t veo_call_async_by_name(struct veo_thr_ctxt *ctx, uint64_t libhdl,
                                 const char *symname, struct veo_args *args)
 {
-    uint64_t reqid = ctx->reqid++;
+    uint64_t reqid = ctx->issue_reqid();
 
-    ctx->cmd_queue.enqueue({{"cmd", VEO_STUBS_CMD_CALL_ASYNC},
-                            {"reqid", reqid},
-                            {"libhdl", libhdl},
-                            {"symname", symname},
-                            {"args", *args}});
+    ctx->submit_request({{"cmd", VEO_STUBS_CMD_CALL_ASYNC},
+                         {"reqid", reqid},
+                         {"libhdl", libhdl},
+                         {"symname", symname},
+                         {"args", *args}});
 
     return reqid;
 }
@@ -178,7 +182,13 @@ uint64_t veo_call_async_by_name(struct veo_thr_ctxt *ctx, uint64_t libhdl,
 int veo_call_wait_result(struct veo_thr_ctxt *ctx, uint64_t reqid,
                          uint64_t *retp)
 {
-    return 0;
+    std::cout << "[VH] waiting for request " << reqid << std::endl;
+
+    *retp = ctx->wait_for_result(reqid);
+
+    std::cout << "[VH] request " << reqid << " completed " << std::endl;
+
+    return VEO_COMMAND_OK;
 }
 
 int veo_num_contexts(struct veo_proc_handle *proc)

@@ -16,7 +16,7 @@ static void handle_load_library(int sock, json req)
 
     void *libhdl = dlopen(libname.c_str(), RTLD_LAZY);
 
-    send_msg(sock, {{"handle", reinterpret_cast<uint64_t>(libhdl)},
+    send_msg(sock, {{"result", reinterpret_cast<uint64_t>(libhdl)},
                     {"reqid", req["reqid"]}});
 }
 
@@ -36,7 +36,7 @@ static void handle_get_sym(int sock, json req)
 
     void *fn = dlsym(libhdl, symname.c_str());
 
-    send_msg(sock, {{"address", reinterpret_cast<uint64_t>(fn)},
+    send_msg(sock, {{"result", reinterpret_cast<uint64_t>(fn)},
                     {"reqid", req["reqid"]}});
 }
 

@@ -46,14 +46,35 @@ struct veo_proc_handle {
 struct veo_thr_ctxt {
     struct veo_proc_handle *proc;
     int sock;
-    moodycamel::BlockingReaderWriterQueue<json> cmd_queue;
-    moodycamel::BlockingReaderWriterQueue<json> comp_queue;
+    moodycamel::BlockingReaderWriterQueue<json> requests;
+    std::unordered_map<uint64_t, uint64_t> results; // reqid -> result
+    std::mutex results_mtx;
+    std::condition_variable results_cv;
+    uint64_t num_reqs;
     std::thread comm_thread;
-    uint64_t reqid;
 
     veo_thr_ctxt(struct veo_proc_handle *proc, int sock)
-        : proc(proc), sock(sock), reqid(0)
+        : proc(proc), sock(sock), num_reqs(0)
     {
+    }
+
+    uint64_t issue_reqid() { return num_reqs++; }
+
+    void submit_request(json request) { this->requests.enqueue(request); }
+
+    uint64_t wait_for_result(uint64_t reqid)
+    {
+        std::unique_lock<std::mutex> lock(this->results_mtx);
+        uint64_t result;
+
+        this->results_cv.wait(lock, [=] {
+            return this->results.find(reqid) != this->results.end();
+        });
+
+        result = this->results.at(reqid);
+        this->results.erase(reqid);
+
+        return result;
     }
 };
 
