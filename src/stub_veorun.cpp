@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <ffi.h>
+#include <spdlog/spdlog.h>
 
 #include "stub.hpp"
 
@@ -150,13 +151,12 @@ static void worker(int server_sock, int worker_sock)
 {
     bool active = true;
 
-    std::cout << "[VE] starting up worker thread " << std::this_thread::get_id()
-              << std::endl;
+    spdlog::debug("[VE] starting up worker thread");
 
     while (active) {
         json req = recv_msg(worker_sock);
 
-        std::cout << "[VE] received " << req << std::endl;
+        spdlog::debug("[VE] received {}", req.dump());
 
         switch (req["cmd"].get<int32_t>()) {
         case VEO_STUBS_CMD_LOAD_LIBRARY:
@@ -198,12 +198,13 @@ static void worker(int server_sock, int worker_sock)
 
     close(worker_sock);
 
-    std::cout << "[VE] shutting down worker thread "
-              << std::this_thread::get_id() << std::endl;
+    spdlog::debug("[VE] shutting down worker thread");
 }
 
 int main(int argc, char *argv[])
 {
+    spdlog::set_level(spdlog::level::debug);
+
     struct sockaddr_un server_addr;
 
     memset(&server_addr, 0, sizeof(server_addr));
@@ -216,11 +217,11 @@ int main(int argc, char *argv[])
 
     if (bind(server_sock, reinterpret_cast<struct sockaddr *>(&server_addr),
              SUN_LEN(&server_addr)) == -1) {
-        std::cout << "[VE] bind() failed" << std::endl;
+        spdlog::error("[VE] bind() failed");
     }
 
     if (listen(server_sock, 32) == -1) {
-        std::cout << "[VE] listen() failed" << std::endl;
+        spdlog::error("[VE] listen() failed");
     }
 
     std::vector<std::thread> worker_threads;
@@ -229,7 +230,7 @@ int main(int argc, char *argv[])
         int worker_sock = accept(server_sock, NULL, NULL);
 
         if (worker_sock == -1) {
-            std::cout << "[VE] shutting down server" << std::endl;
+            spdlog::debug("[VE] shutting down server");
             break;
         }
 
@@ -240,7 +241,7 @@ int main(int argc, char *argv[])
         thread.join();
     }
 
-    std::cout << "[VE] exiting" << std::endl;
+    spdlog::debug("[VE] exiting");
 
     return 0;
 }

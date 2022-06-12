@@ -6,6 +6,8 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <spdlog/spdlog.h>
+
 #include "stub.hpp"
 #include "ve_offload.h"
 
@@ -18,7 +20,7 @@ static void worker(struct veo_thr_ctxt *ctx)
     while (true) {
         ctx->requests.wait_dequeue(cmd);
 
-        std::cout << "[VH] sending command " << cmd << std::endl;
+        spdlog::debug("[VH] sending command {}", cmd.dump());
 
         send_msg(ctx->sock, cmd);
 
@@ -29,7 +31,7 @@ static void worker(struct veo_thr_ctxt *ctx)
 
         res = recv_msg(ctx->sock);
 
-        std::cout << "[VH] received result " << res << std::endl;
+        spdlog::debug("[VH] received result {}", res.dump());
 
         {
             std::lock_guard<std::mutex> lock(ctx->results_mtx);
@@ -54,7 +56,7 @@ static veo_thr_ctxt *_veo_context_open(struct veo_proc_handle *proc)
         // TODO insert sleep?
     }
 
-    std::cout << "[VH] connected to worker on VE" << std::endl;
+    spdlog::debug("[VH] connected to worker on VE");
 
     struct veo_thr_ctxt *ctx = new veo_thr_ctxt(proc, sock);
     ctx->comm_thread = std::thread(worker, ctx);
@@ -64,6 +66,8 @@ static veo_thr_ctxt *_veo_context_open(struct veo_proc_handle *proc)
 
 struct veo_proc_handle *veo_proc_create(int venode)
 {
+    spdlog::set_level(spdlog::level::debug);
+
     pid_t child_pid = fork();
 
     if (child_pid) {
@@ -84,7 +88,7 @@ int veo_proc_destroy(struct veo_proc_handle *proc)
 {
     proc->default_context->submit_request({{"cmd", VEO_STUBS_CMD_QUIT}});
 
-    std::cout << "[VH] Waiting for VE to quit" << std::endl;
+    spdlog::debug("[VH] Waiting for VE to quit");
 
     wait(NULL);
 
@@ -259,13 +263,13 @@ uint64_t veo_call_async_by_name(struct veo_thr_ctxt *ctx, uint64_t libhdl,
 int veo_call_wait_result(struct veo_thr_ctxt *ctx, uint64_t reqid,
                          uint64_t *retp)
 {
-    std::cout << "[VH] waiting for request " << reqid << std::endl;
+    spdlog::debug("[VH] waiting for request {}", reqid);
 
     json result = ctx->wait_for_result(reqid);
 
     *retp = result["result"];
 
-    std::cout << "[VH] request " << reqid << " completed " << std::endl;
+    spdlog::debug("[VH] request {} completed", reqid);
 
     return VEO_COMMAND_OK;
 }
