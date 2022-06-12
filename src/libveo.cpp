@@ -34,8 +34,7 @@ static void worker(struct veo_thr_ctxt *ctx)
         {
             std::lock_guard<std::mutex> lock(ctx->results_mtx);
 
-            uint64_t reqid = res["reqid"], result = res["result"];
-            ctx->results.insert({reqid, result});
+            ctx->results.insert({res["reqid"].get<uint64_t>(), res});
             ctx->results_cv.notify_all();
         }
     }
@@ -102,7 +101,9 @@ uint64_t veo_load_library(struct veo_proc_handle *proc, const char *libname)
                          {"reqid", reqid},
                          {"libname", libname}});
 
-    return ctx->wait_for_result(reqid);
+    json result = ctx->wait_for_result(reqid);
+
+    return result["result"];
 }
 
 int veo_unload_library(veo_proc_handle *proc, const uint64_t libhdl)
@@ -114,7 +115,9 @@ int veo_unload_library(veo_proc_handle *proc, const uint64_t libhdl)
                          {"reqid", reqid},
                          {"libhdl", libhdl}});
 
-    return ctx->wait_for_result(reqid);
+    json result = ctx->wait_for_result(reqid);
+
+    return result["result"];
 }
 
 uint64_t veo_get_sym(struct veo_proc_handle *proc, uint64_t libhdl,
@@ -128,7 +131,78 @@ uint64_t veo_get_sym(struct veo_proc_handle *proc, uint64_t libhdl,
                          {"libhdl", libhdl},
                          {"symname", symname}});
 
-    return ctx->wait_for_result(reqid);
+    json result = ctx->wait_for_result(reqid);
+
+    return result["result"];
+}
+
+int veo_alloc_mem(struct veo_proc_handle *proc, uint64_t *addr,
+                  const size_t size)
+{
+    struct veo_thr_ctxt *ctx = proc->default_context;
+    uint64_t reqid = ctx->issue_reqid();
+
+    ctx->submit_request(
+        {{"cmd", VEO_STUBS_CMD_ALLOC_MEM}, {"reqid", reqid}, {"size", size}});
+
+    json result = ctx->wait_for_result(reqid);
+
+    *addr = result["result"];
+
+    return *addr == 0 ? -1 : 0;
+}
+
+int veo_free_mem(struct veo_proc_handle *proc, uint64_t addr)
+{
+    struct veo_thr_ctxt *ctx = proc->default_context;
+    uint64_t reqid = ctx->issue_reqid();
+
+    ctx->submit_request(
+        {{"cmd", VEO_STUBS_CMD_FREE_MEM}, {"reqid", reqid}, {"addr", addr}});
+
+    json result = ctx->wait_for_result(reqid);
+
+    return result["result"];
+}
+
+int veo_read_mem(struct veo_proc_handle *proc, void *dst, uint64_t src,
+                 size_t size)
+{
+    struct veo_thr_ctxt *ctx = proc->default_context;
+    uint64_t reqid = ctx->issue_reqid();
+
+    ctx->submit_request({{"cmd", VEO_STUBS_CMD_READ_MEM},
+                         {"reqid", reqid},
+                         {"src", src},
+                         {"size", size}});
+
+    json result = ctx->wait_for_result(reqid);
+
+    std::vector<uint8_t> data(result["data"]);
+
+    std::copy(data.begin(), data.end(), reinterpret_cast<uint8_t *>(dst));
+
+    return result["result"];
+}
+
+int veo_write_mem(struct veo_proc_handle *proc, uint64_t dst, const void *src,
+                  size_t size)
+{
+    struct veo_thr_ctxt *ctx = proc->default_context;
+    uint64_t reqid = ctx->issue_reqid();
+
+    std::vector<uint8_t> data(reinterpret_cast<const uint8_t *>(src),
+                              reinterpret_cast<const uint8_t *>(src) + size);
+
+    ctx->submit_request({{"cmd", VEO_STUBS_CMD_WRITE_MEM},
+                         {"reqid", reqid},
+                         {"dst", dst},
+                         {"size", size},
+                         {"data", data}});
+
+    json result = ctx->wait_for_result(reqid);
+
+    return result["result"];
 }
 
 struct veo_thr_ctxt *veo_context_open(struct veo_proc_handle *proc)
@@ -187,7 +261,9 @@ int veo_call_wait_result(struct veo_thr_ctxt *ctx, uint64_t reqid,
 {
     std::cout << "[VH] waiting for request " << reqid << std::endl;
 
-    *retp = ctx->wait_for_result(reqid);
+    json result = ctx->wait_for_result(reqid);
+
+    *retp = result["result"];
 
     std::cout << "[VH] request " << reqid << " completed " << std::endl;
 

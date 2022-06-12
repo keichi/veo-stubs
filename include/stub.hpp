@@ -16,6 +16,10 @@ enum veo_stubs_cmd {
     VEO_STUBS_CMD_LOAD_LIBRARY,
     VEO_STUBS_CMD_UNLOAD_LIBRARY,
     VEO_STUBS_CMD_GET_SYM,
+    VEO_STUBS_CMD_ALLOC_MEM,
+    VEO_STUBS_CMD_FREE_MEM,
+    VEO_STUBS_CMD_READ_MEM,
+    VEO_STUBS_CMD_WRITE_MEM,
     VEO_STUBS_CMD_CALL_ASYNC,
     VEO_STUBS_CMD_OPEN_CONTEXT,
     VEO_STUBS_CMD_CLOSE_CONTEXT,
@@ -47,7 +51,7 @@ struct veo_thr_ctxt {
     struct veo_proc_handle *proc;
     int sock;
     moodycamel::BlockingReaderWriterQueue<json> requests;
-    std::unordered_map<uint64_t, uint64_t> results; // reqid -> result
+    std::unordered_map<uint64_t, json> results;
     std::mutex results_mtx;
     std::condition_variable results_cv;
     uint64_t num_reqs;
@@ -62,16 +66,15 @@ struct veo_thr_ctxt {
 
     void submit_request(json request) { this->requests.enqueue(request); }
 
-    uint64_t wait_for_result(uint64_t reqid)
+    json wait_for_result(uint64_t reqid)
     {
         std::unique_lock<std::mutex> lock(this->results_mtx);
-        uint64_t result;
 
         this->results_cv.wait(lock, [=] {
             return this->results.find(reqid) != this->results.end();
         });
 
-        result = this->results.at(reqid);
+        json result = this->results.at(reqid);
         this->results.erase(reqid);
 
         return result;

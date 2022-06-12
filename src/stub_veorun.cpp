@@ -40,6 +40,45 @@ static void handle_get_sym(int sock, json req)
                     {"reqid", req["reqid"]}});
 }
 
+static void handle_alloc_mem(int sock, json req)
+{
+    uint64_t size = req["size"];
+    const void *ptr = malloc(size);
+
+    send_msg(sock, {{"result", reinterpret_cast<uint64_t>(ptr)},
+                    {"reqid", req["reqid"]}});
+}
+
+static void handle_free_mem(int sock, json req)
+{
+    uint64_t addr = req["addr"];
+    free(reinterpret_cast<void *>(addr));
+
+    send_msg(sock, {{"result", 0}, {"reqid", req["reqid"]}});
+}
+
+static void handle_read_mem(int sock, json req)
+{
+    const uint8_t *src =
+        reinterpret_cast<uint8_t *>(req["src"].get<uint64_t>());
+    uint64_t size = req["size"];
+
+    std::vector<uint8_t> data(src, src + size);
+
+    send_msg(sock, {{"result", 0}, {"reqid", req["reqid"]}, {"data", data}});
+}
+
+static void handle_write_mem(int sock, json req)
+{
+    uint8_t *dst = reinterpret_cast<uint8_t *>(req["dst"].get<uint64_t>());
+    uint64_t size = req["size"];
+    std::vector<uint8_t> data(req["data"]);
+
+    std::copy(data.begin(), data.end(), dst);
+
+    send_msg(sock, {{"result", 0}, {"reqid", req["reqid"]}});
+}
+
 static void handle_call_async(int sock, json req)
 {
     void *libhdl = reinterpret_cast<void *>((req["libhdl"].get<uint64_t>()));
@@ -128,6 +167,18 @@ static void worker(int server_sock, int worker_sock)
             break;
         case VEO_STUBS_CMD_GET_SYM:
             handle_get_sym(worker_sock, req);
+            break;
+        case VEO_STUBS_CMD_ALLOC_MEM:
+            handle_alloc_mem(worker_sock, req);
+            break;
+        case VEO_STUBS_CMD_FREE_MEM:
+            handle_free_mem(worker_sock, req);
+            break;
+        case VEO_STUBS_CMD_READ_MEM:
+            handle_read_mem(worker_sock, req);
+            break;
+        case VEO_STUBS_CMD_WRITE_MEM:
+            handle_write_mem(worker_sock, req);
             break;
         case VEO_STUBS_CMD_CALL_ASYNC:
             handle_call_async(worker_sock, req);
