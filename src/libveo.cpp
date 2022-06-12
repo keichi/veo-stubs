@@ -158,8 +158,11 @@ int veo_context_close(struct veo_thr_ctxt *ctx)
         return 0;
     }
 
+    uint64_t reqid = ctx->issue_reqid();
     ctx->submit_request(
-        {{"cmd", VEO_STUBS_CMD_CLOSE_CONTEXT}, {"reqid", ctx->issue_reqid()}});
+        {{"cmd", VEO_STUBS_CMD_CLOSE_CONTEXT}, {"reqid", reqid}});
+
+    ctx->comm_thread.join();
 
     delete ctx;
     return 0;
