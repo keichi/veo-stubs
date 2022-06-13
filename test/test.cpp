@@ -136,6 +136,8 @@ TEST_CASE("Call a VE function and wait for result")
 
     CHECK(retval == 124);
 
+    veo_args_free(argp);
+
     veo_unload_library(proc, handle);
     veo_context_close(ctx);
     veo_proc_destroy(proc);
@@ -169,6 +171,8 @@ TEST_CASE("Bulk call a VE function and wait for results")
         veo_call_wait_result(ctx, reqids[i], &retval);
 
         CHECK(retval == i + 1);
+
+        veo_args_free(argps[i]);
     }
 
     veo_unload_library(proc, handle);

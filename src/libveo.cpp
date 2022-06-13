@@ -99,6 +99,7 @@ int veo_proc_destroy(struct veo_proc_handle *proc)
 
     // TODO make sure all cotexts are closed?
     proc->default_context->comm_thread.join();
+    delete proc->default_context;
 
     delete proc;
     return 0;
