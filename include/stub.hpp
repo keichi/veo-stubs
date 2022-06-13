@@ -1,6 +1,7 @@
 #ifndef __STUB_HPP__
 #define __STUB_HPP__
 
+#include <condition_variable>
 #include <mutex>
 #include <thread>
 #include <unistd.h>

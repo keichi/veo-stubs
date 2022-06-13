@@ -8,6 +8,8 @@ find_package(PkgConfig)
 
 include_directories(include)
 
+set(SPDLOG_BUILD_SHARED ON CACHE BOOL "")
+
 pkg_check_modules(LIBFFI REQUIRED libffi)
 add_subdirectory(thirdparty/json)
 add_subdirectory(thirdparty/readerwriterqueue)
@@ -20,8 +22,10 @@ target_link_libraries(stub-veorun PRIVATE ${LIBFFI_LIBRARIES})
 target_link_libraries(stub-veorun PRIVATE nlohmann_json::nlohmann_json)
 target_link_libraries(stub-veorun PRIVATE readerwriterqueue)
 target_link_libraries(stub-veorun PRIVATE spdlog::spdlog)
+target_link_libraries(stub-veorun PRIVATE dl)
 
 add_library(veo SHARED src/libveo.cpp)
+set_target_properties(veo PROPERTIES SUFFIX ".so")
 target_link_libraries(veo PRIVATE nlohmann_json::nlohmann_json)
 target_link_libraries(veo PRIVATE readerwriterqueue)
 target_link_libraries(veo PRIVATE spdlog::spdlog)
@@ -29,7 +33,9 @@ target_link_libraries(veo PRIVATE spdlog::spdlog)
 add_executable(veo-test test/test.cpp)
 target_link_libraries(veo-test PRIVATE veo)
 target_link_libraries(veo-test PRIVATE doctest::doctest)
+
 add_library(vehello SHARED test/libvehello.c include/ve_offload.h)
+set_target_properties(vehello PROPERTIES SUFFIX ".so")
 
 enable_testing()
 include(thirdparty/doctest/scripts/cmake/doctest.cmake)

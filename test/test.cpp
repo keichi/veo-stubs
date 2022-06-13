@@ -77,7 +77,7 @@ TEST_CASE("Load and unload library on VE")
 {
     struct veo_proc_handle *proc = veo_proc_create(0);
 
-    uint64_t handle = veo_load_library(proc, "./libvehello.dylib");
+    uint64_t handle = veo_load_library(proc, "./libvehello.so");
 
     CHECK(handle > 0);
 
@@ -90,7 +90,7 @@ TEST_CASE("Call a VE function and wait for result")
 {
     struct veo_proc_handle *proc = veo_proc_create(0);
     struct veo_thr_ctxt *ctx = veo_context_open(proc);
-    uint64_t handle = veo_load_library(proc, "./libvehello.dylib");
+    uint64_t handle = veo_load_library(proc, "./libvehello.so");
 
     CHECK(handle > 0);
 
@@ -115,7 +115,7 @@ TEST_CASE("Bulk call a VE function and wait for results")
 {
     struct veo_proc_handle *proc = veo_proc_create(0);
     struct veo_thr_ctxt *ctx = veo_context_open(proc);
-    uint64_t handle = veo_load_library(proc, "./libvehello.dylib");
+    uint64_t handle = veo_load_library(proc, "./libvehello.so");
 
     CHECK(handle > 0);
 
