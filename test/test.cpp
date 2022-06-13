@@ -30,6 +30,30 @@ TEST_CASE("Create and destroy a VE thread context")
     veo_proc_destroy(proc);
 }
 
+TEST_CASE("Create and destroy mutliple VE thread contexts")
+{
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    struct veo_thr_ctxt *ctxts[10];
+
+    for (size_t i = 0; i < 10; i++) {
+        CHECK(veo_num_contexts(proc) == i);
+
+        ctxts[i] = veo_context_open(proc);
+
+        CHECK(veo_num_contexts(proc) == i + 1);
+    }
+
+    for (size_t i = 0; i < 10; i++) {
+        CHECK(veo_num_contexts(proc) == 10 - i);
+
+        veo_context_close(ctxts[i]);
+
+        CHECK(veo_num_contexts(proc) == 10 - i - 1);
+    }
+
+    veo_proc_destroy(proc);
+}
+
 TEST_CASE("Allocate and free VE memory")
 {
     struct veo_proc_handle *proc = veo_proc_create(0);

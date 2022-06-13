@@ -221,7 +221,7 @@ struct veo_thr_ctxt *veo_context_open(struct veo_proc_handle *proc)
         return proc->default_context;
     }
 
-    static veo_thr_ctxt *ctx = _veo_context_open(proc);
+    struct veo_thr_ctxt *ctx = _veo_context_open(proc);
     proc->contexts.push_back(ctx);
 
     return ctx;
