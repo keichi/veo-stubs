@@ -297,6 +297,8 @@ struct veo_args *veo_args_alloc(void) { return new veo_args; }
 
 void veo_args_free(struct veo_args *ca) { delete ca; }
 
+void veo_args_clear(struct veo_args *ca) { ca->args.clear(); }
+
 int veo_args_set_i64(struct veo_args *ca, int argnum, int64_t val)
 {
     ca->args.resize(std::max(ca->args.size(), static_cast<size_t>(argnum + 1)));
