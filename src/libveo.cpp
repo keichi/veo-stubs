@@ -4,6 +4,7 @@
 #include <mutex>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <thread>
 #include <unistd.h>
 
 #include <spdlog/spdlog.h>
@@ -44,16 +45,19 @@ static void worker(struct veo_thr_ctxt *ctx)
 
 static veo_thr_ctxt *_veo_context_open(struct veo_proc_handle *proc)
 {
+    const std::string sock_path =
+        "/tmp/stub-veorun." + std::to_string(proc->pid) + ".sock";
+
     struct sockaddr_un server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sun_family = AF_LOCAL;
-    strcpy(server_addr.sun_path, "/tmp/stub-veorun.sock");
+    strcpy(server_addr.sun_path, sock_path.c_str());
 
     int sock = socket(AF_LOCAL, SOCK_STREAM, 0);
 
     while (connect(sock, reinterpret_cast<struct sockaddr *>(&server_addr),
                    SUN_LEN(&server_addr)) < 0) {
-        // TODO insert sleep?
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
     spdlog::debug("[VH] connected to worker on VE");
@@ -71,7 +75,7 @@ struct veo_proc_handle *veo_proc_create(int venode)
     pid_t child_pid = fork();
 
     if (child_pid) {
-        struct veo_proc_handle *proc = new veo_proc_handle(child_pid);
+        struct veo_proc_handle *proc = new veo_proc_handle(venode, child_pid);
         struct veo_thr_ctxt *ctx = _veo_context_open(proc);
 
         proc->default_context = ctx;

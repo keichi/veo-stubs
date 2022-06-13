@@ -205,11 +205,13 @@ int main(int argc, char *argv[])
 {
     spdlog::set_level(spdlog::level::debug);
 
-    struct sockaddr_un server_addr;
+    const std::string sock_path =
+        "/tmp/stub-veorun." + std::to_string(getpid()) + ".sock";
 
+    struct sockaddr_un server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sun_family = AF_LOCAL;
-    strcpy(server_addr.sun_path, "/tmp/stub-veorun.sock");
+    strcpy(server_addr.sun_path, sock_path.c_str());
 
     int server_sock = socket(AF_LOCAL, SOCK_STREAM, 0);
 
@@ -240,6 +242,8 @@ int main(int argc, char *argv[])
     for (auto &thread : worker_threads) {
         thread.join();
     }
+
+    unlink(sock_path.c_str());
 
     spdlog::debug("[VE] exiting");
 

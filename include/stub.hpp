@@ -40,11 +40,13 @@ enum veo_stubs_arg_type {
 };
 
 struct veo_proc_handle {
+    int32_t venode;
     pid_t pid;
+
     struct veo_thr_ctxt *default_context;
     std::vector<veo_thr_ctxt *> contexts;
 
-    veo_proc_handle(pid_t pid) : pid(pid) {}
+    veo_proc_handle(int32_t venode, pid_t pid) : venode(venode), pid(pid) {}
 };
 
 struct veo_thr_ctxt {
