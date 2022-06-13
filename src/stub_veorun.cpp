@@ -189,6 +189,7 @@ static void worker(int server_sock, int worker_sock)
         case VEO_STUBS_CMD_QUIT:
             handle_quit(worker_sock, req);
             active = false;
+            shutdown(server_sock, SHUT_RDWR);
             close(server_sock);
             break;
         default:
