@@ -31,8 +31,8 @@ add_executable(veo-test test/test.cpp)
 target_link_libraries(veo-test PRIVATE veo)
 target_link_libraries(veo-test PRIVATE doctest::doctest)
 
-add_library(vehello SHARED test/libvehello.c include/ve_offload.h)
-set_target_properties(vehello PROPERTIES SUFFIX ".so")
+add_library(vetest SHARED test/libvetest.c include/ve_offload.h)
+set_target_properties(vetest PROPERTIES SUFFIX ".so")
 
 enable_testing()
 include(thirdparty/doctest/scripts/cmake/doctest.cmake)
