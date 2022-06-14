@@ -81,6 +81,10 @@ struct veo_proc_handle *veo_proc_create(int venode)
         struct veo_proc_handle *proc = new veo_proc_handle(venode, child_pid);
         struct veo_thr_ctxt *ctx = _veo_context_open(proc);
 
+        if (ctx == NULL) {
+            return NULL;
+        }
+
         proc->default_context = ctx;
 
         procs.push_back(proc);
