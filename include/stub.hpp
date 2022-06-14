@@ -219,7 +219,9 @@ void write_all(int fd, const uint8_t *buf, size_t count)
 {
     while (count > 0) {
         ssize_t written_bytes = write(fd, buf, count);
-        if (written_bytes == -1) {
+        if (written_bytes == 0) {
+            throw std::runtime_error("peer is disconnected");
+        } else if (written_bytes == -1) {
             throw std::runtime_error("write() returned error");
         }
         buf += written_bytes;
@@ -231,7 +233,9 @@ void read_all(int fd, uint8_t *buf, size_t count)
 {
     while (count > 0) {
         ssize_t read_bytes = read(fd, buf, count);
-        if (read_bytes == -1) {
+        if (read_bytes == 0) {
+            throw std::runtime_error("peer is disconnected");
+        } else if (read_bytes == -1) {
             throw std::runtime_error("read() returned error");
         }
         buf += read_bytes;
