@@ -14,6 +14,9 @@ int factorial(int number)
 TEST_CASE("Create and destroy a VE proc handle")
 {
     struct veo_proc_handle *proc = veo_proc_create(0);
+
+    CHECK(veo_proc_identifier(proc) == 0);
+
     veo_proc_destroy(proc);
 }
 
@@ -21,6 +24,10 @@ TEST_CASE("Create and destroy multiple VE proc handles")
 {
     struct veo_proc_handle *proc1 = veo_proc_create(0);
     struct veo_proc_handle *proc2 = veo_proc_create(1);
+
+    CHECK(veo_proc_identifier(proc1) == 0);
+    CHECK(veo_proc_identifier(proc2) == 1);
+
     veo_proc_destroy(proc1);
     veo_proc_destroy(proc2);
 }

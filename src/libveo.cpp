@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <cstdint>
-#include <iostream>
 #include <mutex>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -14,6 +13,8 @@
 #include "ve_offload.h"
 
 extern "C" {
+
+static std::vector<veo_proc_handle *> procs;
 
 static void worker(struct veo_thr_ctxt *ctx)
 {
@@ -81,6 +82,8 @@ struct veo_proc_handle *veo_proc_create(int venode)
 
         proc->default_context = ctx;
 
+        procs.push_back(proc);
+
         return proc;
     } else {
         execl("./stub-veorun", "./stub-veorun", NULL);
@@ -101,8 +104,27 @@ int veo_proc_destroy(struct veo_proc_handle *proc)
     proc->default_context->comm_thread.join();
     delete proc->default_context;
 
+    std::vector<veo_proc_handle *>::iterator it =
+        std::find(procs.begin(), procs.end(), proc);
+
+    if (it != procs.end()) {
+        procs.erase(it);
+    }
+
     delete proc;
     return 0;
+}
+
+int veo_proc_identifier(veo_proc_handle *proc)
+{
+    std::vector<veo_proc_handle *>::iterator it =
+        std::find(procs.begin(), procs.end(), proc);
+
+    if (it != procs.end()) {
+        return it - procs.begin();
+    }
+
+    return -1;
 }
 
 uint64_t veo_load_library(struct veo_proc_handle *proc, const char *libname)
@@ -240,6 +262,8 @@ struct veo_thr_ctxt *veo_context_open(struct veo_proc_handle *proc)
 
 int veo_context_close(struct veo_thr_ctxt *ctx)
 {
+    struct veo_proc_handle *proc = ctx->proc;
+
     std::vector<veo_thr_ctxt *>::iterator it =
         std::find(ctx->proc->contexts.begin(), ctx->proc->contexts.end(), ctx);
 
