@@ -10,8 +10,8 @@ include_directories(include)
 find_package(PkgConfig)
 pkg_check_modules(LIBFFI REQUIRED libffi)
 add_subdirectory(thirdparty/json EXCLUDE_FROM_ALL)
-# set(SPDLOG_BUILD_SHARED ON CACHE BOOL "")
 add_subdirectory(thirdparty/spdlog EXCLUDE_FROM_ALL)
+set_property(TARGET spdlog PROPERTY POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(thirdparty/doctest EXCLUDE_FROM_ALL)
 
 # stub-veorun
