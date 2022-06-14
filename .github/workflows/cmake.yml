@@ -24,7 +24,6 @@ jobs:
           - ""
           - "-fsanitize=address"
           - "-fsanitize=thread"
-          - "-fsanitize=leak"
           - "-fsanitize=undefined"
 
     steps:
