@@ -3,13 +3,13 @@
 
 #include <condition_variable>
 #include <mutex>
+#include <queue>
 #include <thread>
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
 
 #include <nlohmann/json.hpp>
-#include <readerwriterqueue.h>
 
 using json = nlohmann::json;
 
@@ -50,10 +50,35 @@ struct veo_proc_handle {
     veo_proc_handle(int32_t venode, pid_t pid) : venode(venode), pid(pid) {}
 };
 
+template <typename T> class BlockingQueue
+{
+    std::queue<T> queue;
+    std::mutex mtx;
+    std::condition_variable cv;
+
+public:
+    void push(const T &elem)
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+
+        queue.push(elem);
+        cv.notify_one();
+    }
+
+    void wait_pop(T &elem)
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, [&] { return !queue.empty(); });
+
+        elem = queue.front();
+        queue.pop();
+    }
+};
+
 struct veo_thr_ctxt {
     struct veo_proc_handle *proc;
     int sock;
-    moodycamel::BlockingReaderWriterQueue<json> requests;
+    BlockingQueue<json> requests;
     std::unordered_map<uint64_t, json> results;
     std::mutex results_mtx;
     std::condition_variable results_cv;
@@ -67,7 +92,7 @@ struct veo_thr_ctxt {
 
     uint64_t issue_reqid() { return num_reqs++; }
 
-    void submit_request(json request) { this->requests.enqueue(request); }
+    void submit_request(json request) { this->requests.push(request); }
 
     json wait_for_result(uint64_t reqid)
     {

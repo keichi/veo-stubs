@@ -20,7 +20,7 @@ static void worker(struct veo_thr_ctxt *ctx)
     json cmd, res;
 
     while (true) {
-        ctx->requests.wait_dequeue(cmd);
+        ctx->requests.wait_pop(cmd);
 
         spdlog::debug("[VH] sending command {}", cmd.dump());
 
