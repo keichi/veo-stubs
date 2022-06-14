@@ -333,6 +333,7 @@ uint64_t veo_call_async_by_name(struct veo_thr_ctxt *ctx, uint64_t libhdl,
     return reqid;
 }
 
+// TODO how do we now this reqid is valid?
 int veo_call_wait_result(struct veo_thr_ctxt *ctx, uint64_t reqid,
                          uint64_t *retp)
 {

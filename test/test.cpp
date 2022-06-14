@@ -6,11 +6,6 @@
 #include "crc32.h"
 #include "ve_offload.h"
 
-int factorial(int number)
-{
-    return number <= 1 ? number : factorial(number - 1) * number;
-}
-
 TEST_CASE("Create and destroy a VE proc handle")
 {
     struct veo_proc_handle *proc = veo_proc_create(0);
@@ -231,10 +226,13 @@ TEST_CASE("Load and unload library on VE")
     struct veo_proc_handle *proc = veo_proc_create(0);
     REQUIRE(proc != NULL);
 
-    uint64_t handle = veo_load_library(proc, "./libvetest.so");
-    REQUIRE(handle > 0);
+    uint64_t handle1 = veo_load_library(proc, "./libsomerandomname.so");
+    REQUIRE(handle1 == 0);
 
-    veo_unload_library(proc, handle);
+    uint64_t handle2 = veo_load_library(proc, "./libvetest.so");
+    REQUIRE(handle2 > 0);
+
+    veo_unload_library(proc, handle2);
 
     veo_proc_destroy(proc);
 }
@@ -323,7 +321,7 @@ TEST_CASE("Call a VE function by address and wait for result")
 
 TEST_CASE("Bulk call a VE function and wait for results")
 {
-    constexpr size_t REP = 256;
+    constexpr size_t REP = 100;
 
     struct veo_proc_handle *proc = veo_proc_create(0);
     REQUIRE(proc != NULL);
@@ -354,6 +352,46 @@ TEST_CASE("Bulk call a VE function and wait for results")
         REQUIRE(retval == i + 1);
 
         veo_args_free(argps[i]);
+    }
+
+    veo_unload_library(proc, handle);
+    veo_context_close(ctx);
+    veo_proc_destroy(proc);
+}
+
+TEST_CASE("Bulk call a VE function and wait for results in reverse order")
+{
+    constexpr size_t REP = 100;
+
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    REQUIRE(proc != NULL);
+
+    struct veo_thr_ctxt *ctx = veo_context_open(proc);
+    REQUIRE(ctx != NULL);
+
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
+    REQUIRE(handle > 0);
+
+    struct veo_args *argps[REP];
+    uint64_t reqids[REP];
+
+    for (size_t i = 0; i < REP; i++) {
+        argps[i] = veo_args_alloc();
+        veo_args_set_i32(argps[i], 0, i);
+
+        reqids[i] = veo_call_async_by_name(ctx, handle, "increment", argps[i]);
+
+        REQUIRE(reqids[i] > 0);
+    }
+
+    uint64_t retval;
+
+    for (size_t i = 0; i < REP; i++) {
+        veo_call_wait_result(ctx, reqids[REP - i - 1], &retval);
+
+        REQUIRE(retval == REP - i);
+
+        veo_args_free(argps[REP - i - 1]);
     }
 
     veo_unload_library(proc, handle);
