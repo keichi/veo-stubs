@@ -161,7 +161,7 @@ TEST_CASE("Read VE memory")
     veo_proc_destroy(proc);
 }
 
-TEST_CASE("Write and read VE memory")
+TEST_CASE("Write and read back VE memory")
 {
     std::mt19937 engine(0xdeadbeef);
     std::uniform_int_distribution<uint8_t> dist;
@@ -207,7 +207,23 @@ TEST_CASE("Load and unload library on VE")
     veo_proc_destroy(proc);
 }
 
-TEST_CASE("Call a VE function and wait for result")
+TEST_CASE("Get address of a symbol on VE")
+{
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    struct veo_thr_ctxt *ctx = veo_context_open(proc);
+
+    uint64_t handle = veo_load_library(proc, "./libvehello.so");
+    CHECK(handle > 0);
+
+    CHECK(veo_get_sym(proc, handle, "increment") > 0);
+    CHECK(veo_get_sym(proc, handle, "somerandomname") == 0);
+
+    veo_unload_library(proc, handle);
+    veo_context_close(ctx);
+    veo_proc_destroy(proc);
+}
+
+TEST_CASE("Call a VE function by name and wait for result")
 {
     struct veo_proc_handle *proc = veo_proc_create(0);
     struct veo_thr_ctxt *ctx = veo_context_open(proc);
@@ -219,6 +235,37 @@ TEST_CASE("Call a VE function and wait for result")
     veo_args_set_i32(argp, 0, 123);
 
     uint64_t reqid = veo_call_async_by_name(ctx, handle, "increment", argp);
+    uint64_t retval;
+
+    CHECK(reqid > 0);
+
+    veo_call_wait_result(ctx, reqid, &retval);
+
+    CHECK(retval == 124);
+
+    veo_args_free(argp);
+
+    veo_unload_library(proc, handle);
+    veo_context_close(ctx);
+    veo_proc_destroy(proc);
+}
+
+TEST_CASE("Call a VE function by address and wait for result")
+{
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    struct veo_thr_ctxt *ctx = veo_context_open(proc);
+    uint64_t handle = veo_load_library(proc, "./libvehello.so");
+
+    CHECK(handle > 0);
+
+    uint64_t addr = veo_get_sym(proc, handle, "increment");
+
+    CHECK(addr > 0);
+
+    struct veo_args *argp = veo_args_alloc();
+    veo_args_set_i32(argp, 0, 123);
+
+    uint64_t reqid = veo_call_async(ctx, addr, argp);
     uint64_t retval;
 
     CHECK(reqid > 0);

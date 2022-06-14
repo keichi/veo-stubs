@@ -255,12 +255,25 @@ int veo_context_close(struct veo_thr_ctxt *ctx)
     return 0;
 }
 
+uint64_t veo_call_async(struct veo_thr_ctxt *ctx, uint64_t addr,
+                        struct veo_args *args)
+{
+    uint64_t reqid = ctx->issue_reqid();
+
+    ctx->submit_request({{"cmd", VEO_STUBS_CMD_CALL_ASYNC},
+                         {"reqid", reqid},
+                         {"addr", addr},
+                         {"args", *args}});
+
+    return reqid;
+}
+
 uint64_t veo_call_async_by_name(struct veo_thr_ctxt *ctx, uint64_t libhdl,
                                 const char *symname, struct veo_args *args)
 {
     uint64_t reqid = ctx->issue_reqid();
 
-    ctx->submit_request({{"cmd", VEO_STUBS_CMD_CALL_ASYNC},
+    ctx->submit_request({{"cmd", VEO_STUBS_CMD_CALL_ASYNC_BY_NAME},
                          {"reqid", reqid},
                          {"libhdl", libhdl},
                          {"symname", symname},

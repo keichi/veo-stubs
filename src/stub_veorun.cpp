@@ -11,7 +11,7 @@
 
 #include "stub.hpp"
 
-static void handle_load_library(int sock, json req)
+static void handle_load_library(int sock, const json &req)
 {
     std::string libname = req["libname"];
 
@@ -21,7 +21,7 @@ static void handle_load_library(int sock, json req)
                     {"reqid", req["reqid"]}});
 }
 
-static void handle_unload_library(int sock, json req)
+static void handle_unload_library(int sock, const json &req)
 {
     void *libhdl = reinterpret_cast<void *>((req["libhdl"].get<uint64_t>()));
 
@@ -30,7 +30,7 @@ static void handle_unload_library(int sock, json req)
     send_msg(sock, {{"result", result}, {"reqid", req["reqid"]}});
 }
 
-static void handle_get_sym(int sock, json req)
+static void handle_get_sym(int sock, const json &req)
 {
     void *libhdl = reinterpret_cast<void *>((req["libhdl"].get<uint64_t>()));
     std::string symname = req["symname"];
@@ -41,7 +41,7 @@ static void handle_get_sym(int sock, json req)
                     {"reqid", req["reqid"]}});
 }
 
-static void handle_alloc_mem(int sock, json req)
+static void handle_alloc_mem(int sock, const json &req)
 {
     uint64_t size = req["size"];
     const void *ptr = malloc(size);
@@ -58,7 +58,7 @@ static void handle_free_mem(int sock, json req)
     send_msg(sock, {{"result", 0}, {"reqid", req["reqid"]}});
 }
 
-static void handle_read_mem(int sock, json req)
+static void handle_read_mem(int sock, const json &req)
 {
     const uint8_t *src =
         reinterpret_cast<uint8_t *>(req["src"].get<uint64_t>());
@@ -69,7 +69,7 @@ static void handle_read_mem(int sock, json req)
     send_msg(sock, {{"result", 0}, {"reqid", req["reqid"]}, {"data", data}});
 }
 
-static void handle_write_mem(int sock, json req)
+static void handle_write_mem(int sock, const json &req)
 {
     uint8_t *dst = reinterpret_cast<uint8_t *>(req["dst"].get<uint64_t>());
     uint64_t size = req["size"];
@@ -80,17 +80,13 @@ static void handle_write_mem(int sock, json req)
     send_msg(sock, {{"result", 0}, {"reqid", req["reqid"]}});
 }
 
-static void handle_call_async(int sock, json req)
+static uint64_t _call_func(void *fn, struct veo_args *args)
 {
-    void *libhdl = reinterpret_cast<void *>((req["libhdl"].get<uint64_t>()));
-    std::string symname = req["symname"];
-    struct veo_args args = req["args"];
-
     ffi_cif cif;
     std::vector<ffi_type *> arg_types;
     std::vector<void *> arg_values;
 
-    for (auto &arg : args.args) {
+    for (auto &arg : args->args) {
         switch (arg.type) {
         case VEO_STUBS_ARG_TYPE_I64:
             arg_types.push_back(&ffi_type_sint64);
@@ -138,9 +134,29 @@ static void handle_call_async(int sock, json req)
     ffi_status status = ffi_prep_cif(&cif, FFI_DEFAULT_ABI, arg_types.size(),
                                      &ffi_type_uint64, arg_types.data());
 
-    void *fn = dlsym(libhdl, symname.c_str());
     uint64_t res;
     ffi_call(&cif, FFI_FN(fn), &res, arg_values.data());
+
+    return res;
+}
+
+static void handle_call_async(int sock, const json &req)
+{
+    void *fn = reinterpret_cast<void *>(req["addr"].get<uint64_t>());
+    struct veo_args args = req["args"];
+
+    uint64_t res = _call_func(fn, &args);
+
+    send_msg(sock, {{"result", res}, {"reqid", req["reqid"]}});
+}
+
+static void handle_call_async_by_name(int sock, const json &req)
+{
+    void *libhdl = reinterpret_cast<void *>((req["libhdl"].get<uint64_t>()));
+    void *fn = dlsym(libhdl, req["symname"].get<std::string>().c_str());
+    struct veo_args args = req["args"];
+
+    uint64_t res = _call_func(fn, &args);
 
     send_msg(sock, {{"result", res}, {"reqid", req["reqid"]}});
 }
@@ -182,6 +198,9 @@ static void worker(int server_sock, int worker_sock)
             break;
         case VEO_STUBS_CMD_CALL_ASYNC:
             handle_call_async(worker_sock, req);
+            break;
+        case VEO_STUBS_CMD_CALL_ASYNC_BY_NAME:
+            handle_call_async_by_name(worker_sock, req);
             break;
         case VEO_STUBS_CMD_CLOSE_CONTEXT:
             active = false;
