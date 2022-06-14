@@ -84,7 +84,9 @@ TEST_CASE("Write VE memory")
 
     struct veo_proc_handle *proc = veo_proc_create(0);
     struct veo_thr_ctxt *ctx = veo_context_open(proc);
-    uint64_t handle = veo_load_library(proc, "./libvehello.so");
+
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
+    CHECK(handle > 0);
 
     uint64_t ve_buf;
     uint8_t vh_buf[BUF_SIZE];
@@ -125,7 +127,9 @@ TEST_CASE("Read VE memory")
 
     struct veo_proc_handle *proc = veo_proc_create(0);
     struct veo_thr_ctxt *ctx = veo_context_open(proc);
-    uint64_t handle = veo_load_library(proc, "./libvehello.so");
+
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
+    CHECK(handle > 0);
 
     uint64_t ve_buf;
     uint8_t vh_buf[BUF_SIZE];
@@ -198,8 +202,7 @@ TEST_CASE("Load and unload library on VE")
 {
     struct veo_proc_handle *proc = veo_proc_create(0);
 
-    uint64_t handle = veo_load_library(proc, "./libvehello.so");
-
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
     CHECK(handle > 0);
 
     veo_unload_library(proc, handle);
@@ -212,7 +215,7 @@ TEST_CASE("Get address of a symbol on VE")
     struct veo_proc_handle *proc = veo_proc_create(0);
     struct veo_thr_ctxt *ctx = veo_context_open(proc);
 
-    uint64_t handle = veo_load_library(proc, "./libvehello.so");
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
     CHECK(handle > 0);
 
     CHECK(veo_get_sym(proc, handle, "increment") > 0);
@@ -227,8 +230,8 @@ TEST_CASE("Call a VE function by name and wait for result")
 {
     struct veo_proc_handle *proc = veo_proc_create(0);
     struct veo_thr_ctxt *ctx = veo_context_open(proc);
-    uint64_t handle = veo_load_library(proc, "./libvehello.so");
 
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
     CHECK(handle > 0);
 
     struct veo_args *argp = veo_args_alloc();
@@ -254,12 +257,11 @@ TEST_CASE("Call a VE function by address and wait for result")
 {
     struct veo_proc_handle *proc = veo_proc_create(0);
     struct veo_thr_ctxt *ctx = veo_context_open(proc);
-    uint64_t handle = veo_load_library(proc, "./libvehello.so");
 
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
     CHECK(handle > 0);
 
     uint64_t addr = veo_get_sym(proc, handle, "increment");
-
     CHECK(addr > 0);
 
     struct veo_args *argp = veo_args_alloc();
@@ -287,8 +289,8 @@ TEST_CASE("Bulk call a VE function and wait for results")
 
     struct veo_proc_handle *proc = veo_proc_create(0);
     struct veo_thr_ctxt *ctx = veo_context_open(proc);
-    uint64_t handle = veo_load_library(proc, "./libvehello.so");
 
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
     CHECK(handle > 0);
 
     struct veo_args *argps[REP];
