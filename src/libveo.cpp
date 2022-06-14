@@ -58,7 +58,7 @@ static veo_thr_ctxt *_veo_context_open(struct veo_proc_handle *proc)
     int sock = socket(AF_LOCAL, SOCK_STREAM, 0);
 
     int retry_count = 0;
-    const int MAX_RETRIES = 1000;
+    const int MAX_RETRIES = 100;
     while (connect(sock, reinterpret_cast<struct sockaddr *>(&server_addr),
                    SUN_LEN(&server_addr)) < 0) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -80,6 +80,7 @@ static veo_thr_ctxt *_veo_context_open(struct veo_proc_handle *proc)
 
 struct veo_proc_handle *veo_proc_create(int venode)
 {
+    // TODO call this in an __attribute__((constructor)) function?
     spdlog::set_level(spdlog::level::debug);
 
     pid_t child_pid = fork();
@@ -98,9 +99,12 @@ struct veo_proc_handle *veo_proc_create(int venode)
 
         return proc;
     } else {
-        const char *argv[] = {"./stub-veorun", NULL};
+        char *VEORUN_BIN_ENV = strdup(getenv("VEORUN_BIN"));
+        const char *VEORUN_BIN =
+            VEORUN_BIN_ENV ? VEORUN_BIN_ENV : "stub-veorun";
+        const char *argv[] = {VEORUN_BIN, NULL};
 
-        execvp("./stub-veorun", const_cast<char *const *>(argv));
+        execvp(VEORUN_BIN, const_cast<char *const *>(argv));
 
         spdlog::error("[VH] failed to launch stub-veorun");
 
