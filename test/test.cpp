@@ -114,6 +114,8 @@ TEST_CASE("Write VE memory")
 
     CHECK(retval == crc32(vh_buf, BUF_SIZE));
 
+    veo_args_free(argp);
+
     veo_free_mem(proc, ve_buf);
 
     veo_unload_library(proc, handle);
@@ -150,6 +152,8 @@ TEST_CASE("Read VE memory")
     veo_call_wait_result(ctx, reqid, &retval);
 
     CHECK(retval == 0);
+
+    veo_args_free(argp);
 
     veo_read_mem(proc, vh_buf, ve_buf, BUF_SIZE);
 
