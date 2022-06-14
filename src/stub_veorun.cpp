@@ -235,8 +235,6 @@ int main(int argc, char *argv[])
 
     int server_sock = socket(AF_LOCAL, SOCK_STREAM, 0);
 
-    unlink("/tmp/stub-veorun.sock");
-
     if (bind(server_sock, reinterpret_cast<struct sockaddr *>(&server_addr),
              SUN_LEN(&server_addr)) == -1) {
         spdlog::error("[VE] bind() failed");
