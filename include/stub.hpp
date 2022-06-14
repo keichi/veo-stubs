@@ -95,7 +95,7 @@ struct veo_thr_ctxt {
 
     void submit_request(json request) { this->requests.push(request); }
 
-    json wait_for_result(uint64_t reqid)
+    void wait_result(uint64_t reqid, json &result)
     {
         std::unique_lock<std::mutex> lock(this->results_mtx);
 
@@ -103,10 +103,22 @@ struct veo_thr_ctxt {
             return this->results.find(reqid) != this->results.end();
         });
 
-        json result = this->results.at(reqid);
+        result = this->results.at(reqid);
+        this->results.erase(reqid);
+    }
+
+    bool peek_result(uint64_t reqid, json &result)
+    {
+        std::lock_guard<std::mutex> lock(this->results_mtx);
+
+        if (this->results.find(reqid) == this->results.end()) {
+            return false;
+        }
+
+        result = this->results.at(reqid);
         this->results.erase(reqid);
 
-        return result;
+        return true;
     }
 };
 

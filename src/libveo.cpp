@@ -114,7 +114,8 @@ uint64_t veo_load_library(struct veo_proc_handle *proc, const char *libname)
                          {"reqid", reqid},
                          {"libname", libname}});
 
-    json result = ctx->wait_for_result(reqid);
+    json result;
+    ctx->wait_result(reqid, result);
 
     return result["result"];
 }
@@ -128,7 +129,8 @@ int veo_unload_library(veo_proc_handle *proc, const uint64_t libhdl)
                          {"reqid", reqid},
                          {"libhdl", libhdl}});
 
-    json result = ctx->wait_for_result(reqid);
+    json result;
+    ctx->wait_result(reqid, result);
 
     return result["result"];
 }
@@ -144,7 +146,8 @@ uint64_t veo_get_sym(struct veo_proc_handle *proc, uint64_t libhdl,
                          {"libhdl", libhdl},
                          {"symname", symname}});
 
-    json result = ctx->wait_for_result(reqid);
+    json result;
+    ctx->wait_result(reqid, result);
 
     return result["result"];
 }
@@ -158,7 +161,8 @@ int veo_alloc_mem(struct veo_proc_handle *proc, uint64_t *addr,
     ctx->submit_request(
         {{"cmd", VEO_STUBS_CMD_ALLOC_MEM}, {"reqid", reqid}, {"size", size}});
 
-    json result = ctx->wait_for_result(reqid);
+    json result;
+    ctx->wait_result(reqid, result);
 
     *addr = result["result"];
 
@@ -173,7 +177,8 @@ int veo_free_mem(struct veo_proc_handle *proc, uint64_t addr)
     ctx->submit_request(
         {{"cmd", VEO_STUBS_CMD_FREE_MEM}, {"reqid", reqid}, {"addr", addr}});
 
-    json result = ctx->wait_for_result(reqid);
+    json result;
+    ctx->wait_result(reqid, result);
 
     return result["result"];
 }
@@ -189,7 +194,8 @@ int veo_read_mem(struct veo_proc_handle *proc, void *dst, uint64_t src,
                          {"src", src},
                          {"size", size}});
 
-    json result = ctx->wait_for_result(reqid);
+    json result;
+    ctx->wait_result(reqid, result);
 
     std::vector<uint8_t> data(result["data"]);
 
@@ -213,7 +219,8 @@ int veo_write_mem(struct veo_proc_handle *proc, uint64_t dst, const void *src,
                          {"size", size},
                          {"data", data}});
 
-    json result = ctx->wait_for_result(reqid);
+    json result;
+    ctx->wait_result(reqid, result);
 
     return result["result"];
 }
@@ -287,11 +294,31 @@ int veo_call_wait_result(struct veo_thr_ctxt *ctx, uint64_t reqid,
 {
     spdlog::debug("[VH] waiting for request {}", reqid);
 
-    json result = ctx->wait_for_result(reqid);
+    json result;
+    ctx->wait_result(reqid, result);
 
     *retp = result["result"];
 
     spdlog::debug("[VH] request {} completed", reqid);
+
+    return VEO_COMMAND_OK;
+}
+
+int veo_call_peek_result(struct veo_thr_ctxt *ctx, uint64_t reqid,
+                         uint64_t *retp)
+{
+    spdlog::debug("[VH] peeking request {}", reqid);
+
+    json result;
+    bool finished = ctx->peek_result(reqid, result);
+
+    if (!finished) {
+        spdlog::debug("[VH] request {} is pending", reqid);
+
+        return VEO_COMMAND_UNFINISHED;
+    }
+
+    *retp = result["result"];
 
     return VEO_COMMAND_OK;
 }
