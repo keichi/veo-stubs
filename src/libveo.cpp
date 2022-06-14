@@ -57,6 +57,7 @@ static veo_thr_ctxt *_veo_context_open(struct veo_proc_handle *proc)
 
     int sock = socket(AF_LOCAL, SOCK_STREAM, 0);
 
+    // TODO limit retry count -- stub-veorun may have failed to start
     while (connect(sock, reinterpret_cast<struct sockaddr *>(&server_addr),
                    SUN_LEN(&server_addr)) < 0) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -86,9 +87,13 @@ struct veo_proc_handle *veo_proc_create(int venode)
 
         return proc;
     } else {
-        execl("./stub-veorun", "./stub-veorun", NULL);
+        const char *argv[] = {"./stub-veorun", NULL};
 
-        return NULL;
+        execvp("./stub-veorun", const_cast<char *const *>(argv));
+
+        spdlog::error("[VH] failed to launch stub-veorun");
+
+        exit(-1);
     }
 }
 
