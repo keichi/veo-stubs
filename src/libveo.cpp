@@ -57,10 +57,17 @@ static veo_thr_ctxt *_veo_context_open(struct veo_proc_handle *proc)
 
     int sock = socket(AF_LOCAL, SOCK_STREAM, 0);
 
-    // TODO limit retry count -- stub-veorun may have failed to start
+    int retry_count = 0;
+    const int MAX_RETRIES = 1000;
     while (connect(sock, reinterpret_cast<struct sockaddr *>(&server_addr),
                    SUN_LEN(&server_addr)) < 0) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+        if (++retry_count >= MAX_RETRIES) {
+            spdlog::error("[VH] cannot connect to worker on VE");
+
+            return NULL;
+        }
     }
 
     spdlog::debug("[VH] connected to worker on VE");
