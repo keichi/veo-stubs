@@ -1,6 +1,9 @@
+#include <random>
+
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
+#include "crc32.h"
 #include "ve_offload.h"
 
 int factorial(int number)
@@ -72,9 +75,98 @@ TEST_CASE("Allocate and free VE memory")
     veo_proc_destroy(proc);
 }
 
+TEST_CASE("Write VE memory")
+{
+    std::mt19937 engine(0xdeadbeef);
+    std::uniform_int_distribution<uint8_t> dist;
+
+    constexpr size_t BUF_SIZE = 1024;
+
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    struct veo_thr_ctxt *ctx = veo_context_open(proc);
+    uint64_t handle = veo_load_library(proc, "./libvehello.so");
+
+    uint64_t ve_buf;
+    uint8_t vh_buf[BUF_SIZE];
+
+    for (size_t i = 0; i < BUF_SIZE; i++) {
+        vh_buf[i] = dist(engine);
+    }
+
+    veo_alloc_mem(proc, &ve_buf, BUF_SIZE);
+
+    CHECK(ve_buf > 0);
+
+    veo_write_mem(proc, ve_buf, vh_buf, BUF_SIZE);
+
+    struct veo_args *argp = veo_args_alloc();
+    veo_args_set_u64(argp, 0, ve_buf);
+    veo_args_set_u64(argp, 1, BUF_SIZE);
+
+    uint64_t reqid = veo_call_async_by_name(ctx, handle, "checksum", argp);
+    uint64_t retval;
+
+    CHECK(reqid > 0);
+
+    veo_call_wait_result(ctx, reqid, &retval);
+
+    CHECK(retval == crc32(vh_buf, BUF_SIZE));
+
+    veo_free_mem(proc, ve_buf);
+
+    veo_unload_library(proc, handle);
+    veo_context_close(ctx);
+    veo_proc_destroy(proc);
+}
+
+TEST_CASE("Read VE memory")
+{
+    constexpr size_t BUF_SIZE = 1024;
+
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    struct veo_thr_ctxt *ctx = veo_context_open(proc);
+    uint64_t handle = veo_load_library(proc, "./libvehello.so");
+
+    uint64_t ve_buf;
+    uint8_t vh_buf[BUF_SIZE];
+
+    veo_alloc_mem(proc, &ve_buf, BUF_SIZE);
+
+    CHECK(ve_buf > 0);
+
+    struct veo_args *argp = veo_args_alloc();
+    veo_args_set_u64(argp, 0, ve_buf);
+    veo_args_set_u64(argp, 1, BUF_SIZE);
+
+    uint64_t reqid = veo_call_async_by_name(ctx, handle, "iota", argp);
+    uint64_t retval;
+
+    CHECK(reqid > 0);
+
+    veo_call_wait_result(ctx, reqid, &retval);
+
+    CHECK(retval == 0);
+
+    veo_read_mem(proc, vh_buf, ve_buf, BUF_SIZE);
+
+    veo_free_mem(proc, ve_buf);
+
+    uint8_t x = 0;
+    for (size_t i = 0; i < BUF_SIZE; i++) {
+        CHECK(vh_buf[i] == x++);
+    }
+
+    veo_unload_library(proc, handle);
+    veo_context_close(ctx);
+    veo_proc_destroy(proc);
+}
+
 TEST_CASE("Write and read VE memory")
 {
-    constexpr size_t BUF_SIZE = 256;
+    std::mt19937 engine(0xdeadbeef);
+    std::uniform_int_distribution<uint8_t> dist;
+
+    constexpr size_t BUF_SIZE = 1024;
 
     struct veo_proc_handle *proc = veo_proc_create(0);
 
@@ -82,7 +174,7 @@ TEST_CASE("Write and read VE memory")
     uint8_t vh_buf1[BUF_SIZE], vh_buf2[BUF_SIZE];
 
     for (size_t i = 0; i < BUF_SIZE; i++) {
-        vh_buf1[i] = i;
+        vh_buf1[i] = dist(engine);
         vh_buf2[i] = 0;
     }
 
@@ -94,8 +186,7 @@ TEST_CASE("Write and read VE memory")
     veo_read_mem(proc, vh_buf2, ve_buf, BUF_SIZE);
 
     for (size_t i = 0; i < BUF_SIZE; i++) {
-        CHECK(vh_buf1[i] == i);
-        CHECK(vh_buf2[i] == i);
+        CHECK(vh_buf1[i] == vh_buf2[i]);
     }
 
     veo_free_mem(proc, ve_buf);
@@ -127,7 +218,7 @@ TEST_CASE("Call a VE function and wait for result")
     struct veo_args *argp = veo_args_alloc();
     veo_args_set_i32(argp, 0, 123);
 
-    uint64_t reqid = veo_call_async_by_name(ctx, handle, "hello", argp);
+    uint64_t reqid = veo_call_async_by_name(ctx, handle, "increment", argp);
     uint64_t retval;
 
     CHECK(reqid > 0);
@@ -160,7 +251,7 @@ TEST_CASE("Bulk call a VE function and wait for results")
         argps[i] = veo_args_alloc();
         veo_args_set_i32(argps[i], 0, i);
 
-        reqids[i] = veo_call_async_by_name(ctx, handle, "hello", argps[i]);
+        reqids[i] = veo_call_async_by_name(ctx, handle, "increment", argps[i]);
 
         CHECK(reqids[i] > 0);
     }
