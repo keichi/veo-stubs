@@ -3,10 +3,9 @@ cmake_minimum_required(VERSION 3.10)
 set(CMAKE_CXX_STANDARD 17)
 
 project(veo-stubs)
-
 include_directories(include)
 
-# dependencies
+# Dependencies
 find_package(PkgConfig)
 pkg_check_modules(LIBFFI REQUIRED libffi)
 add_subdirectory(thirdparty/json EXCLUDE_FROM_ALL)
@@ -29,11 +28,18 @@ set_target_properties(veo PROPERTIES PUBLIC_HEADER "include/ve_offload.h;include
 target_link_libraries(veo PRIVATE nlohmann_json::nlohmann_json)
 target_link_libraries(veo PRIVATE spdlog::spdlog)
 
-# installation rules
+# Installation rules
 install(TARGETS stub-veorun)
 install(TARGETS veo)
 
-# tests
+# CPack
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Keichi Takahashi <hello@keichi.dev>")
+set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/keichi/veo-stubs")
+set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "VE Offloading API stubs")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libffi-dev")
+include(CPack)
+
+# Tests
 add_executable(veo-test test/test.cpp)
 target_link_libraries(veo-test PRIVATE veo)
 target_link_libraries(veo-test PRIVATE doctest::doctest)
