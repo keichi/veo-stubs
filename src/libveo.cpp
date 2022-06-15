@@ -57,8 +57,11 @@ static veo_thr_ctxt *_veo_context_open(struct veo_proc_handle *proc)
 
     int sock = socket(AF_LOCAL, SOCK_STREAM, 0);
 
+    // TODO need to properly check if stub-veorun has started otherwise
+    // stub-veorun may become an orphan process
     int retry_count = 0;
-    const int MAX_RETRIES = 100;
+    const int MAX_RETRIES = 1000;
+
     while (connect(sock, reinterpret_cast<struct sockaddr *>(&server_addr),
                    SUN_LEN(&server_addr)) < 0) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
