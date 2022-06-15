@@ -398,3 +398,28 @@ TEST_CASE("Bulk call a VE function and wait for results in reverse order")
     veo_context_close(ctx);
     veo_proc_destroy(proc);
 }
+
+TEST_CASE("Synchronously call a VE function")
+{
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    REQUIRE(proc != NULL);
+
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
+    REQUIRE(handle > 0);
+
+    uint64_t addr = veo_get_sym(proc, handle, "increment");
+    REQUIRE(addr > 0);
+
+    struct veo_args *argp = veo_args_alloc();
+    veo_args_set_i32(argp, 0, 123);
+
+    uint64_t retval;
+    REQUIRE(veo_call_sync(proc, addr, argp, &retval) == 0);
+
+    REQUIRE(retval == 124);
+
+    veo_args_free(argp);
+
+    veo_unload_library(proc, handle);
+    veo_proc_destroy(proc);
+}
