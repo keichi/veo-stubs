@@ -1,6 +1,7 @@
 #ifndef __STUB_HPP__
 #define __STUB_HPP__
 
+#include <atomic>
 #include <condition_variable>
 #include <mutex>
 #include <queue>
@@ -78,16 +79,20 @@ public:
 
 struct veo_thr_ctxt {
     struct veo_proc_handle *proc;
+
     int sock;
+    std::thread comm_thread;
+    std::atomic<bool> is_running;
+
     BlockingQueue<json> requests;
+    uint64_t num_reqs;
+
     std::unordered_map<uint64_t, json> results;
     std::mutex results_mtx;
     std::condition_variable results_cv;
-    uint64_t num_reqs;
-    std::thread comm_thread;
 
     veo_thr_ctxt(struct veo_proc_handle *proc, int sock)
-        : proc(proc), sock(sock), num_reqs(0)
+        : proc(proc), sock(sock), num_reqs(0), is_running(true)
     {
     }
 
@@ -95,16 +100,24 @@ struct veo_thr_ctxt {
 
     void submit_request(json request) { this->requests.push(request); }
 
-    void wait_result(uint64_t reqid, json &result)
+    bool wait_result(uint64_t reqid, json &result)
     {
         std::unique_lock<std::mutex> lock(this->results_mtx);
 
         this->results_cv.wait(lock, [=] {
-            return this->results.find(reqid) != this->results.end();
+            return this->results.find(reqid) != this->results.end() ||
+                   !this->is_running;
         });
+
+        // this means comm_thread exited
+        if (this->results.find(reqid) == this->results.end()) {
+            return false;
+        }
 
         result = this->results.at(reqid);
         this->results.erase(reqid);
+
+        return true;
     }
 
     bool peek_result(uint64_t reqid, json &result)
@@ -227,52 +240,64 @@ void from_json(const json &j, veo_args &args)
     }
 }
 
-void write_all(int fd, const uint8_t *buf, size_t count)
+bool do_write(int fd, const uint8_t *buf, size_t count)
 {
     while (count > 0) {
         ssize_t written_bytes = write(fd, buf, count);
-        if (written_bytes == 0) {
-            throw std::runtime_error("peer is disconnected");
-        } else if (written_bytes == -1) {
-            throw std::runtime_error("write() returned error");
+        if (written_bytes == 0 || written_bytes == -1) {
+            return false;
         }
         buf += written_bytes;
         count -= written_bytes;
     }
+
+    return true;
 }
 
-void read_all(int fd, uint8_t *buf, size_t count)
+bool do_read(int fd, uint8_t *buf, size_t count)
 {
     while (count > 0) {
         ssize_t read_bytes = read(fd, buf, count);
-        if (read_bytes == 0) {
-            throw std::runtime_error("peer is disconnected");
-        } else if (read_bytes == -1) {
-            throw std::runtime_error("read() returned error");
+        if (read_bytes == 0 || read_bytes == -1) {
+            return false;
         }
         buf += read_bytes;
         count -= read_bytes;
     }
+
+    return true;
 }
 
-void send_msg(int sock, const json &msg)
+bool send_msg(int sock, const json &msg)
 {
     std::vector<std::uint8_t> buffer = json::to_msgpack(msg);
     uint32_t size = buffer.size();
 
-    write_all(sock, reinterpret_cast<uint8_t *>(&size), sizeof(size));
-    write_all(sock, buffer.data(), size);
+    if (!do_write(sock, reinterpret_cast<uint8_t *>(&size), sizeof(size))) {
+        return false;
+    }
+    if (!do_write(sock, buffer.data(), size)) {
+        return false;
+    }
+
+    return true;
 }
 
-json recv_msg(int sock)
+bool recv_msg(int sock, json &msg)
 {
     uint32_t size;
-    read_all(sock, reinterpret_cast<uint8_t *>(&size), sizeof(size));
+    if (!do_read(sock, reinterpret_cast<uint8_t *>(&size), sizeof(size))) {
+        return false;
+    }
 
     std::vector<std::uint8_t> buffer(size);
-    read_all(sock, buffer.data(), size);
+    if (!do_read(sock, buffer.data(), size)) {
+        return false;
+    }
 
-    return json::from_msgpack(buffer);
+    msg = json::from_msgpack(buffer);
+
+    return true;
 }
 
 #endif

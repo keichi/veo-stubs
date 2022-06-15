@@ -36,6 +36,7 @@ static void handle_get_sym(int sock, const json &req)
     std::string symname = req["symname"];
 
     void *fn = dlsym(libhdl, symname.c_str());
+    // TODO print dlerror() if fn is NULL
 
     send_msg(sock, {{"result", reinterpret_cast<uint64_t>(fn)},
                     {"reqid", req["reqid"]}});
@@ -154,6 +155,7 @@ static void handle_call_async_by_name(int sock, const json &req)
 {
     void *libhdl = reinterpret_cast<void *>((req["libhdl"].get<uint64_t>()));
     void *fn = dlsym(libhdl, req["symname"].get<std::string>().c_str());
+    // TODO print dlerror() if fn is NULL
     struct veo_args args = req["args"];
 
     uint64_t res = _call_func(fn, &args);
@@ -170,7 +172,9 @@ static void worker(int server_sock, int worker_sock)
     spdlog::debug("[VE] starting up worker thread");
 
     while (active) {
-        json req = recv_msg(worker_sock);
+        json req;
+
+        recv_msg(worker_sock, req);
 
         spdlog::debug("[VE] received {}", req.dump());
 
@@ -229,9 +233,9 @@ int main(int argc, char *argv[])
         "/tmp/stub-veorun." + std::to_string(getpid()) + ".sock";
 
     struct sockaddr_un server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
+    std::memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sun_family = AF_LOCAL;
-    strcpy(server_addr.sun_path, sock_path.c_str());
+    std::strcpy(server_addr.sun_path, sock_path.c_str());
 
     int server_sock = socket(AF_LOCAL, SOCK_STREAM, 0);
 

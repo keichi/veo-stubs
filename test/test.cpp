@@ -423,3 +423,33 @@ TEST_CASE("Synchronously call a VE function")
     veo_unload_library(proc, handle);
     veo_proc_destroy(proc);
 }
+
+TEST_CASE("Call a VE function that aborts")
+{
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    REQUIRE(proc != NULL);
+
+    struct veo_thr_ctxt *ctx = veo_context_open(proc);
+    REQUIRE(ctx != NULL);
+
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
+    REQUIRE(handle > 0);
+
+    struct veo_args *argp = veo_args_alloc();
+
+    uint64_t reqid, retval;
+
+    reqid = veo_call_async_by_name(ctx, handle, "raise_sigabrt", argp);
+    REQUIRE(reqid > 0);
+    REQUIRE(veo_call_wait_result(ctx, reqid, &retval) == VEO_COMMAND_ERROR);
+
+    reqid = veo_call_async_by_name(ctx, handle, "increment", argp);
+    REQUIRE(reqid > 0);
+    REQUIRE(veo_call_wait_result(ctx, reqid, &retval) == VEO_COMMAND_ERROR);
+
+    veo_args_free(argp);
+
+    veo_unload_library(proc, handle);
+    veo_context_close(ctx);
+    veo_proc_destroy(proc);
+}

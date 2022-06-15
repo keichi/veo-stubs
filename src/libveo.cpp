@@ -19,20 +19,29 @@ static std::vector<veo_proc_handle *> procs;
 static void worker(struct veo_thr_ctxt *ctx)
 {
     json cmd, res;
+    bool aborted = false;
 
     while (true) {
         ctx->requests.wait_pop(cmd);
 
         spdlog::debug("[VH] sending command {}", cmd.dump());
 
-        send_msg(ctx->sock, cmd);
+        if (!send_msg(ctx->sock, cmd)) {
+            spdlog::error("[VH] failed to send command to VE");
+            aborted = true;
+            break;
+        }
 
         if (cmd["cmd"] == VEO_STUBS_CMD_CLOSE_CONTEXT ||
             cmd["cmd"] == VEO_STUBS_CMD_QUIT) {
             break;
         }
 
-        res = recv_msg(ctx->sock);
+        if (!recv_msg(ctx->sock, res)) {
+            spdlog::error("[VH] failed to receive result from VE");
+            aborted = true;
+            break;
+        }
 
         spdlog::debug("[VH] received result {}", res.dump());
 
@@ -40,13 +49,22 @@ static void worker(struct veo_thr_ctxt *ctx)
             std::lock_guard<std::mutex> lock(ctx->results_mtx);
 
             ctx->results.insert({res["reqid"].get<uint64_t>(), res});
-            ctx->results_cv.notify_all();
+            ctx->results_cv.notify_one();
         }
+    }
+
+    ctx->is_running = false;
+
+    if (aborted) {
+        // Notify main thread in case it's waiting for results
+        ctx->results_cv.notify_one();
     }
 }
 
 static veo_thr_ctxt *_veo_context_open(struct veo_proc_handle *proc)
 {
+    // We intentionally do not check if proc (or any pointer given by the user)
+    // is valid to match the behavior with libveo
     const std::string sock_path =
         "/tmp/stub-veorun." + std::to_string(proc->pid) + ".sock";
 
@@ -57,8 +75,9 @@ static veo_thr_ctxt *_veo_context_open(struct veo_proc_handle *proc)
 
     int sock = socket(AF_LOCAL, SOCK_STREAM, 0);
 
-    // TODO need to properly check if stub-veorun has started otherwise
-    // stub-veorun may become an orphan process
+    // TODO We need to properly check if stub-veorun has started otherwise
+    // stub-veorun may become an orphan process. Maybe send a message if
+    // execvp fails?
     int retry_count = 0;
     const int MAX_RETRIES = 1000;
 
@@ -89,6 +108,7 @@ struct veo_proc_handle *veo_proc_create(int venode)
     pid_t child_pid = fork();
 
     if (child_pid) {
+        // TODO use VE_NODE_NUMBER if venode == -1
         struct veo_proc_handle *proc = new veo_proc_handle(venode, child_pid);
         struct veo_thr_ctxt *ctx = _veo_context_open(proc);
 
@@ -127,12 +147,15 @@ int veo_proc_destroy(struct veo_proc_handle *proc)
     proc->default_context->comm_thread.join();
     delete proc->default_context;
 
-    std::vector<veo_proc_handle *>::iterator it =
-        std::find(procs.begin(), procs.end(), proc);
+    const auto it = std::find(procs.begin(), procs.end(), proc);
 
     if (it != procs.end()) {
         procs.erase(it);
     }
+
+    const std::string sock_path =
+        "/tmp/stub-veorun." + std::to_string(proc->pid) + ".sock";
+    unlink(sock_path.c_str());
 
     delete proc;
     return 0;
@@ -140,14 +163,13 @@ int veo_proc_destroy(struct veo_proc_handle *proc)
 
 int veo_proc_identifier(veo_proc_handle *proc)
 {
-    std::vector<veo_proc_handle *>::iterator it =
-        std::find(procs.begin(), procs.end(), proc);
+    const auto it = std::find(procs.begin(), procs.end(), proc);
 
-    if (it != procs.end()) {
-        return it - procs.begin();
+    if (it == procs.end()) {
+        return -1;
     }
 
-    return -1;
+    return it - procs.begin();
 }
 
 uint64_t veo_load_library(struct veo_proc_handle *proc, const char *libname)
@@ -160,7 +182,9 @@ uint64_t veo_load_library(struct veo_proc_handle *proc, const char *libname)
                          {"libname", libname}});
 
     json result;
-    ctx->wait_result(reqid, result);
+    if (!ctx->wait_result(reqid, result)) {
+        return -1;
+    }
 
     return result["result"];
 }
@@ -175,7 +199,9 @@ int veo_unload_library(veo_proc_handle *proc, const uint64_t libhdl)
                          {"libhdl", libhdl}});
 
     json result;
-    ctx->wait_result(reqid, result);
+    if (!ctx->wait_result(reqid, result)) {
+        return -1;
+    }
 
     return result["result"];
 }
@@ -192,7 +218,9 @@ uint64_t veo_get_sym(struct veo_proc_handle *proc, uint64_t libhdl,
                          {"symname", symname}});
 
     json result;
-    ctx->wait_result(reqid, result);
+    if (!ctx->wait_result(reqid, result)) {
+        return 0;
+    }
 
     return result["result"];
 }
@@ -207,7 +235,9 @@ int veo_alloc_mem(struct veo_proc_handle *proc, uint64_t *addr,
         {{"cmd", VEO_STUBS_CMD_ALLOC_MEM}, {"reqid", reqid}, {"size", size}});
 
     json result;
-    ctx->wait_result(reqid, result);
+    if (!ctx->wait_result(reqid, result)) {
+        return -1;
+    }
 
     *addr = result["result"];
 
@@ -223,7 +253,9 @@ int veo_free_mem(struct veo_proc_handle *proc, uint64_t addr)
         {{"cmd", VEO_STUBS_CMD_FREE_MEM}, {"reqid", reqid}, {"addr", addr}});
 
     json result;
-    ctx->wait_result(reqid, result);
+    if (!ctx->wait_result(reqid, result)) {
+        return -1;
+    }
 
     return result["result"];
 }
@@ -240,7 +272,9 @@ int veo_read_mem(struct veo_proc_handle *proc, void *dst, uint64_t src,
                          {"size", size}});
 
     json result;
-    ctx->wait_result(reqid, result);
+    if (!ctx->wait_result(reqid, result)) {
+        return -1;
+    }
 
     std::vector<uint8_t> data(result["data"]);
 
@@ -265,7 +299,9 @@ int veo_write_mem(struct veo_proc_handle *proc, uint64_t dst, const void *src,
                          {"data", data}});
 
     json result;
-    ctx->wait_result(reqid, result);
+    if (!ctx->wait_result(reqid, result)) {
+        return -1;
+    }
 
     return result["result"];
 }
@@ -287,7 +323,7 @@ int veo_context_close(struct veo_thr_ctxt *ctx)
 {
     struct veo_proc_handle *proc = ctx->proc;
 
-    std::vector<veo_thr_ctxt *>::iterator it =
+    const auto it =
         std::find(ctx->proc->contexts.begin(), ctx->proc->contexts.end(), ctx);
 
     if (it != ctx->proc->contexts.end()) {
@@ -354,11 +390,17 @@ int veo_call_wait_result(struct veo_thr_ctxt *ctx, uint64_t reqid,
     spdlog::debug("[VH] waiting for request {}", reqid);
 
     json result;
-    ctx->wait_result(reqid, result);
+    if (!ctx->wait_result(reqid, result)) {
+        spdlog::error("[VH] context is not running");
+        return VEO_COMMAND_ERROR;
+    }
 
     *retp = result["result"];
 
     spdlog::debug("[VH] request {} completed", reqid);
+
+    // TODO return VEO_COMMAND_ERROR if symbol cannot be found
+    // TODO return VEO_COMMAND_ERROR if reqid is invalid
 
     return VEO_COMMAND_OK;
 }
@@ -394,6 +436,11 @@ struct veo_thr_ctxt *veo_get_context(struct veo_proc_handle *proc, int idx)
     }
 
     return proc->contexts[idx];
+}
+
+int veo_get_context_state(struct veo_thr_ctxt *ctx)
+{
+    return ctx->is_running ? VEO_STATE_RUNNING : VEO_STATE_EXIT;
 }
 
 struct veo_args *veo_args_alloc(void) { return new veo_args; }

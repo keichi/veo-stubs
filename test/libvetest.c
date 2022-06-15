@@ -1,3 +1,5 @@
+#include <signal.h>
+
 #include "crc32.h"
 
 uint64_t increment(uint64_t i) { return i + 1; }
@@ -16,5 +18,11 @@ uint64_t iota(uint64_t ptr, uint64_t size)
         *(arr++) = x++;
     }
 
+    return 0;
+}
+
+uint64_t raise_sigabrt()
+{
+    raise(SIGABRT);
     return 0;
 }
