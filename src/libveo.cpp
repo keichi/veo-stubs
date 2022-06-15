@@ -491,4 +491,13 @@ int veo_args_set_float(struct veo_args *ca, int argnum, float val)
 
     return 0;
 }
+
+int veo_api_version(void) { return VEO_API_VERSION; }
+
+const char *veo_version_string(void)
+{
+    static const char *VEO_VERSION_STRING = "2.10.0";
+
+    return VEO_VERSION_STRING;
+}
 }
