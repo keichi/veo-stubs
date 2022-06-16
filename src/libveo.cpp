@@ -32,8 +32,7 @@ static void worker(struct veo_thr_ctxt *ctx)
             break;
         }
 
-        if (cmd["cmd"] == VEO_STUBS_CMD_CLOSE_CONTEXT ||
-            cmd["cmd"] == VEO_STUBS_CMD_QUIT) {
+        if (cmd["cmd"] == VS_CMD_CLOSE_CONTEXT || cmd["cmd"] == VS_CMD_QUIT) {
             break;
         }
 
@@ -137,7 +136,7 @@ struct veo_proc_handle *veo_proc_create(int venode)
 
 int veo_proc_destroy(struct veo_proc_handle *proc)
 {
-    proc->default_context->submit_request({{"cmd", VEO_STUBS_CMD_QUIT}});
+    proc->default_context->submit_request({{"cmd", VS_CMD_QUIT}});
 
     spdlog::debug("[VH] Waiting for VE to quit");
 
@@ -177,9 +176,8 @@ uint64_t veo_load_library(struct veo_proc_handle *proc, const char *libname)
     struct veo_thr_ctxt *ctx = proc->default_context;
     uint64_t reqid = ctx->issue_reqid();
 
-    ctx->submit_request({{"cmd", VEO_STUBS_CMD_LOAD_LIBRARY},
-                         {"reqid", reqid},
-                         {"libname", libname}});
+    ctx->submit_request(
+        {{"cmd", VS_CMD_LOAD_LIBRARY}, {"reqid", reqid}, {"libname", libname}});
 
     json result;
     if (!ctx->wait_result(reqid, result)) {
@@ -194,9 +192,8 @@ int veo_unload_library(veo_proc_handle *proc, const uint64_t libhdl)
     struct veo_thr_ctxt *ctx = proc->default_context;
     uint64_t reqid = ctx->issue_reqid();
 
-    ctx->submit_request({{"cmd", VEO_STUBS_CMD_UNLOAD_LIBRARY},
-                         {"reqid", reqid},
-                         {"libhdl", libhdl}});
+    ctx->submit_request(
+        {{"cmd", VS_CMD_UNLOAD_LIBRARY}, {"reqid", reqid}, {"libhdl", libhdl}});
 
     json result;
     if (!ctx->wait_result(reqid, result)) {
@@ -212,7 +209,7 @@ uint64_t veo_get_sym(struct veo_proc_handle *proc, uint64_t libhdl,
     struct veo_thr_ctxt *ctx = proc->default_context;
     uint64_t reqid = ctx->issue_reqid();
 
-    ctx->submit_request({{"cmd", VEO_STUBS_CMD_GET_SYM},
+    ctx->submit_request({{"cmd", VS_CMD_GET_SYM},
                          {"reqid", reqid},
                          {"libhdl", libhdl},
                          {"symname", symname}});
@@ -232,7 +229,7 @@ int veo_alloc_mem(struct veo_proc_handle *proc, uint64_t *addr,
     uint64_t reqid = ctx->issue_reqid();
 
     ctx->submit_request(
-        {{"cmd", VEO_STUBS_CMD_ALLOC_MEM}, {"reqid", reqid}, {"size", size}});
+        {{"cmd", VS_CMD_ALLOC_MEM}, {"reqid", reqid}, {"size", size}});
 
     json result;
     if (!ctx->wait_result(reqid, result)) {
@@ -250,7 +247,7 @@ int veo_free_mem(struct veo_proc_handle *proc, uint64_t addr)
     uint64_t reqid = ctx->issue_reqid();
 
     ctx->submit_request(
-        {{"cmd", VEO_STUBS_CMD_FREE_MEM}, {"reqid", reqid}, {"addr", addr}});
+        {{"cmd", VS_CMD_FREE_MEM}, {"reqid", reqid}, {"addr", addr}});
 
     json result;
     if (!ctx->wait_result(reqid, result)) {
@@ -266,7 +263,7 @@ int veo_read_mem(struct veo_proc_handle *proc, void *dst, uint64_t src,
     struct veo_thr_ctxt *ctx = proc->default_context;
     uint64_t reqid = ctx->issue_reqid();
 
-    ctx->submit_request({{"cmd", VEO_STUBS_CMD_READ_MEM},
+    ctx->submit_request({{"cmd", VS_CMD_READ_MEM},
                          {"reqid", reqid},
                          {"src", src},
                          {"size", size}});
@@ -292,7 +289,7 @@ int veo_write_mem(struct veo_proc_handle *proc, uint64_t dst, const void *src,
     std::vector<uint8_t> data(reinterpret_cast<const uint8_t *>(src),
                               reinterpret_cast<const uint8_t *>(src) + size);
 
-    ctx->submit_request({{"cmd", VEO_STUBS_CMD_WRITE_MEM},
+    ctx->submit_request({{"cmd", VS_CMD_WRITE_MEM},
                          {"reqid", reqid},
                          {"dst", dst},
                          {"size", size},
@@ -336,8 +333,7 @@ int veo_context_close(struct veo_thr_ctxt *ctx)
     }
 
     uint64_t reqid = ctx->issue_reqid();
-    ctx->submit_request(
-        {{"cmd", VEO_STUBS_CMD_CLOSE_CONTEXT}, {"reqid", reqid}});
+    ctx->submit_request({{"cmd", VS_CMD_CLOSE_CONTEXT}, {"reqid", reqid}});
 
     ctx->comm_thread.join();
 
@@ -350,7 +346,7 @@ uint64_t veo_call_async(struct veo_thr_ctxt *ctx, uint64_t addr,
 {
     uint64_t reqid = ctx->issue_reqid();
 
-    ctx->submit_request({{"cmd", VEO_STUBS_CMD_CALL_ASYNC},
+    ctx->submit_request({{"cmd", VS_CMD_CALL_ASYNC},
                          {"reqid", reqid},
                          {"addr", addr},
                          {"args", *args}});
@@ -363,7 +359,7 @@ uint64_t veo_call_async_by_name(struct veo_thr_ctxt *ctx, uint64_t libhdl,
 {
     uint64_t reqid = ctx->issue_reqid();
 
-    ctx->submit_request({{"cmd", VEO_STUBS_CMD_CALL_ASYNC_BY_NAME},
+    ctx->submit_request({{"cmd", VS_CMD_CALL_ASYNC_BY_NAME},
                          {"reqid", reqid},
                          {"libhdl", libhdl},
                          {"symname", symname},
@@ -451,91 +447,57 @@ void veo_args_clear(struct veo_args *ca) { ca->args.clear(); }
 
 int veo_args_set_i64(struct veo_args *ca, int argnum, int64_t val)
 {
-    ca->args.resize(std::max(ca->args.size(), static_cast<size_t>(argnum + 1)));
-    ca->args[argnum].type = VEO_STUBS_ARG_TYPE_I64;
-    ca->args[argnum].i64 = val;
-
-    return 0;
+    return veo_args_set(ca, argnum, val);
 }
 
 int veo_args_set_u64(struct veo_args *ca, int argnum, uint64_t val)
 {
-    ca->args.resize(std::max(ca->args.size(), static_cast<size_t>(argnum + 1)));
-    ca->args[argnum].type = VEO_STUBS_ARG_TYPE_U64;
-    ca->args[argnum].u64 = val;
-
-    return 0;
+    return veo_args_set(ca, argnum, val);
 }
 
 int veo_args_set_i32(struct veo_args *ca, int argnum, int32_t val)
 {
-    ca->args.resize(std::max(ca->args.size(), static_cast<size_t>(argnum + 1)));
-    ca->args[argnum].type = VEO_STUBS_ARG_TYPE_I32;
-    ca->args[argnum].i32 = val;
-
-    return 0;
+    return veo_args_set(ca, argnum, val);
 }
 
 int veo_args_set_u32(struct veo_args *ca, int argnum, uint32_t val)
 {
-    ca->args.resize(std::max(ca->args.size(), static_cast<size_t>(argnum + 1)));
-    ca->args[argnum].type = VEO_STUBS_ARG_TYPE_U32;
-    ca->args[argnum].u32 = val;
-
-    return 0;
+    return veo_args_set(ca, argnum, val);
 }
 
 int veo_args_set_i16(struct veo_args *ca, int argnum, int16_t val)
 {
-    ca->args.resize(std::max(ca->args.size(), static_cast<size_t>(argnum + 1)));
-    ca->args[argnum].type = VEO_STUBS_ARG_TYPE_I16;
-    ca->args[argnum].i16 = val;
-
-    return 0;
+    return veo_args_set(ca, argnum, val);
 }
 
 int veo_args_set_u16(struct veo_args *ca, int argnum, uint16_t val)
 {
-    ca->args.resize(std::max(ca->args.size(), static_cast<size_t>(argnum + 1)));
-    ca->args[argnum].type = VEO_STUBS_ARG_TYPE_U16;
-    ca->args[argnum].u16 = val;
-
-    return 0;
+    return veo_args_set(ca, argnum, val);
 }
 
 int veo_args_set_i8(struct veo_args *ca, int argnum, int8_t val)
 {
-    ca->args.resize(std::max(ca->args.size(), static_cast<size_t>(argnum + 1)));
-    ca->args[argnum].type = VEO_STUBS_ARG_TYPE_I8;
-    ca->args[argnum].i8 = val;
-
-    return 0;
+    return veo_args_set(ca, argnum, val);
 }
 
 int veo_args_set_u8(struct veo_args *ca, int argnum, uint8_t val)
 {
-    ca->args.resize(std::max(ca->args.size(), static_cast<size_t>(argnum + 1)));
-    ca->args[argnum].type = VEO_STUBS_ARG_TYPE_U8;
-    ca->args[argnum].u8 = val;
-
-    return 0;
+    return veo_args_set(ca, argnum, val);
 }
 
 int veo_args_set_double(struct veo_args *ca, int argnum, double val)
 {
-    ca->args.resize(std::max(ca->args.size(), static_cast<size_t>(argnum + 1)));
-    ca->args[argnum].type = VEO_STUBS_ARG_TYPE_DOUBLE;
-    ca->args[argnum].d = val;
-
-    return 0;
+    return veo_args_set(ca, argnum, val);
 }
 
 int veo_args_set_float(struct veo_args *ca, int argnum, float val)
 {
-    ca->args.resize(std::max(ca->args.size(), static_cast<size_t>(argnum + 1)));
-    ca->args[argnum].type = VEO_STUBS_ARG_TYPE_FLOAT;
-    ca->args[argnum].f = val;
+    return veo_args_set(ca, argnum, val);
+}
 
+int veo_args_set_stack(veo_args *ca, enum veo_args_intent inout, int argnum,
+                       char *buff, size_t len)
+{
     return 0;
 }
 

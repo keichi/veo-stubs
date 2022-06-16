@@ -88,46 +88,46 @@ static uint64_t _call_func(void *fn, struct veo_args *args)
     std::vector<void *> arg_values;
 
     for (auto &arg : args->args) {
-        switch (arg.type) {
-        case VEO_STUBS_ARG_TYPE_I64:
+        switch (arg.val.index()) {
+        case VS_ARG_TYPE_I64:
             arg_types.push_back(&ffi_type_sint64);
-            arg_values.push_back(&(arg.i64));
+            arg_values.push_back(std::get_if<VS_ARG_TYPE_I64>(&arg.val));
             break;
-        case VEO_STUBS_ARG_TYPE_U64:
+        case VS_ARG_TYPE_U64:
             arg_types.push_back(&ffi_type_uint64);
-            arg_values.push_back(&(arg.u64));
+            arg_values.push_back(std::get_if<VS_ARG_TYPE_U64>(&arg.val));
             break;
-        case VEO_STUBS_ARG_TYPE_I32:
+        case VS_ARG_TYPE_I32:
             arg_types.push_back(&ffi_type_sint32);
-            arg_values.push_back(&(arg.i32));
+            arg_values.push_back(std::get_if<VS_ARG_TYPE_I32>(&arg.val));
             break;
-        case VEO_STUBS_ARG_TYPE_U32:
+        case VS_ARG_TYPE_U32:
             arg_types.push_back(&ffi_type_uint32);
-            arg_values.push_back(&(arg.u32));
+            arg_values.push_back(std::get_if<VS_ARG_TYPE_U32>(&arg.val));
             break;
-        case VEO_STUBS_ARG_TYPE_I16:
+        case VS_ARG_TYPE_I16:
             arg_types.push_back(&ffi_type_sint16);
-            arg_values.push_back(&(arg.i16));
+            arg_values.push_back(std::get_if<VS_ARG_TYPE_I16>(&arg.val));
             break;
-        case VEO_STUBS_ARG_TYPE_U16:
+        case VS_ARG_TYPE_U16:
             arg_types.push_back(&ffi_type_uint16);
-            arg_values.push_back(&(arg.u16));
+            arg_values.push_back(std::get_if<VS_ARG_TYPE_U16>(&arg.val));
             break;
-        case VEO_STUBS_ARG_TYPE_I8:
+        case VS_ARG_TYPE_I8:
             arg_types.push_back(&ffi_type_sint8);
-            arg_values.push_back(&(arg.i8));
+            arg_values.push_back(std::get_if<VS_ARG_TYPE_I8>(&arg.val));
             break;
-        case VEO_STUBS_ARG_TYPE_U8:
+        case VS_ARG_TYPE_U8:
             arg_types.push_back(&ffi_type_uint8);
-            arg_values.push_back(&(arg.u8));
+            arg_values.push_back(std::get_if<VS_ARG_TYPE_U8>(&arg.val));
             break;
-        case VEO_STUBS_ARG_TYPE_DOUBLE:
+        case VS_ARG_TYPE_DOUBLE:
             arg_types.push_back(&ffi_type_double);
-            arg_values.push_back(&(arg.d));
+            arg_values.push_back(std::get_if<VS_ARG_TYPE_DOUBLE>(&arg.val));
             break;
-        case VEO_STUBS_ARG_TYPE_FLOAT:
+        case VS_ARG_TYPE_FLOAT:
             arg_types.push_back(&ffi_type_float);
-            arg_values.push_back(&(arg.f));
+            arg_values.push_back(std::get_if<VS_ARG_TYPE_FLOAT>(&arg.val));
             break;
         }
     }
@@ -179,37 +179,37 @@ static void worker(int server_sock, int worker_sock)
         spdlog::debug("[VE] received {}", req.dump());
 
         switch (req["cmd"].get<int32_t>()) {
-        case VEO_STUBS_CMD_LOAD_LIBRARY:
+        case VS_CMD_LOAD_LIBRARY:
             handle_load_library(worker_sock, req);
             break;
-        case VEO_STUBS_CMD_UNLOAD_LIBRARY:
+        case VS_CMD_UNLOAD_LIBRARY:
             handle_unload_library(worker_sock, req);
             break;
-        case VEO_STUBS_CMD_GET_SYM:
+        case VS_CMD_GET_SYM:
             handle_get_sym(worker_sock, req);
             break;
-        case VEO_STUBS_CMD_ALLOC_MEM:
+        case VS_CMD_ALLOC_MEM:
             handle_alloc_mem(worker_sock, req);
             break;
-        case VEO_STUBS_CMD_FREE_MEM:
+        case VS_CMD_FREE_MEM:
             handle_free_mem(worker_sock, req);
             break;
-        case VEO_STUBS_CMD_READ_MEM:
+        case VS_CMD_READ_MEM:
             handle_read_mem(worker_sock, req);
             break;
-        case VEO_STUBS_CMD_WRITE_MEM:
+        case VS_CMD_WRITE_MEM:
             handle_write_mem(worker_sock, req);
             break;
-        case VEO_STUBS_CMD_CALL_ASYNC:
+        case VS_CMD_CALL_ASYNC:
             handle_call_async(worker_sock, req);
             break;
-        case VEO_STUBS_CMD_CALL_ASYNC_BY_NAME:
+        case VS_CMD_CALL_ASYNC_BY_NAME:
             handle_call_async_by_name(worker_sock, req);
             break;
-        case VEO_STUBS_CMD_CLOSE_CONTEXT:
+        case VS_CMD_CLOSE_CONTEXT:
             active = false;
             break;
-        case VEO_STUBS_CMD_QUIT:
+        case VS_CMD_QUIT:
             handle_quit(worker_sock, req);
             active = false;
             shutdown(server_sock, SHUT_RDWR);

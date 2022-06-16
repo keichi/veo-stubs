@@ -8,38 +8,41 @@
 #include <thread>
 #include <unistd.h>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 
+#include "ve_offload.h"
+
 using json = nlohmann::json;
 
 enum veo_stubs_cmd {
-    VEO_STUBS_CMD_LOAD_LIBRARY,
-    VEO_STUBS_CMD_UNLOAD_LIBRARY,
-    VEO_STUBS_CMD_GET_SYM,
-    VEO_STUBS_CMD_ALLOC_MEM,
-    VEO_STUBS_CMD_FREE_MEM,
-    VEO_STUBS_CMD_READ_MEM,
-    VEO_STUBS_CMD_WRITE_MEM,
-    VEO_STUBS_CMD_CALL_ASYNC,
-    VEO_STUBS_CMD_CALL_ASYNC_BY_NAME,
-    VEO_STUBS_CMD_OPEN_CONTEXT,
-    VEO_STUBS_CMD_CLOSE_CONTEXT,
-    VEO_STUBS_CMD_QUIT,
+    VS_CMD_LOAD_LIBRARY,
+    VS_CMD_UNLOAD_LIBRARY,
+    VS_CMD_GET_SYM,
+    VS_CMD_ALLOC_MEM,
+    VS_CMD_FREE_MEM,
+    VS_CMD_READ_MEM,
+    VS_CMD_WRITE_MEM,
+    VS_CMD_CALL_ASYNC,
+    VS_CMD_CALL_ASYNC_BY_NAME,
+    VS_CMD_OPEN_CONTEXT,
+    VS_CMD_CLOSE_CONTEXT,
+    VS_CMD_QUIT,
 };
 
 enum veo_stubs_arg_type {
-    VEO_STUBS_ARG_TYPE_I64,
-    VEO_STUBS_ARG_TYPE_U64,
-    VEO_STUBS_ARG_TYPE_I32,
-    VEO_STUBS_ARG_TYPE_U32,
-    VEO_STUBS_ARG_TYPE_I16,
-    VEO_STUBS_ARG_TYPE_U16,
-    VEO_STUBS_ARG_TYPE_I8,
-    VEO_STUBS_ARG_TYPE_U8,
-    VEO_STUBS_ARG_TYPE_DOUBLE,
-    VEO_STUBS_ARG_TYPE_FLOAT,
+    VS_ARG_TYPE_I64,
+    VS_ARG_TYPE_U64,
+    VS_ARG_TYPE_I32,
+    VS_ARG_TYPE_U32,
+    VS_ARG_TYPE_I16,
+    VS_ARG_TYPE_U16,
+    VS_ARG_TYPE_I8,
+    VS_ARG_TYPE_U8,
+    VS_ARG_TYPE_DOUBLE,
+    VS_ARG_TYPE_FLOAT,
 };
 
 struct veo_proc_handle {
@@ -136,20 +139,9 @@ struct veo_thr_ctxt {
 };
 
 struct veo_arg {
-    veo_stubs_arg_type type;
-
-    union {
-        int64_t i64;
-        uint64_t u64;
-        int32_t i32;
-        uint32_t u32;
-        int16_t i16;
-        uint16_t u16;
-        int8_t i8;
-        uint8_t u8;
-        double d;
-        float f;
-    };
+    std::variant<int64_t, uint64_t, int32_t, uint32_t, int16_t, uint16_t,
+                 int8_t, uint8_t, double, float>
+        val;
 };
 
 struct veo_args {
@@ -161,38 +153,42 @@ void to_json(json &j, const veo_args &args)
     j = json::array();
 
     for (const auto &arg : args.args) {
-        switch (arg.type) {
-        case VEO_STUBS_ARG_TYPE_I64:
-            j.push_back({{"type", arg.type}, {"val", arg.i64}});
+        json e = {{"type", arg.val.index()}};
+
+        switch (arg.val.index()) {
+        case VS_ARG_TYPE_I64:
+            e["val"] = std::get<VS_ARG_TYPE_I64>(arg.val);
             break;
-        case VEO_STUBS_ARG_TYPE_U64:
-            j.push_back({{"type", arg.type}, {"val", arg.u64}});
+        case VS_ARG_TYPE_U64:
+            e["val"] = std::get<VS_ARG_TYPE_U64>(arg.val);
             break;
-        case VEO_STUBS_ARG_TYPE_I32:
-            j.push_back({{"type", arg.type}, {"val", arg.i32}});
+        case VS_ARG_TYPE_I32:
+            e["val"] = std::get<VS_ARG_TYPE_I32>(arg.val);
             break;
-        case VEO_STUBS_ARG_TYPE_U32:
-            j.push_back({{"type", arg.type}, {"val", arg.u32}});
+        case VS_ARG_TYPE_U32:
+            e["val"] = std::get<VS_ARG_TYPE_U32>(arg.val);
             break;
-        case VEO_STUBS_ARG_TYPE_I16:
-            j.push_back({{"type", arg.type}, {"val", arg.i16}});
+        case VS_ARG_TYPE_I16:
+            e["val"] = std::get<VS_ARG_TYPE_I16>(arg.val);
             break;
-        case VEO_STUBS_ARG_TYPE_U16:
-            j.push_back({{"type", arg.type}, {"val", arg.u16}});
+        case VS_ARG_TYPE_U16:
+            e["val"] = std::get<VS_ARG_TYPE_U16>(arg.val);
             break;
-        case VEO_STUBS_ARG_TYPE_I8:
-            j.push_back({{"type", arg.type}, {"val", arg.i8}});
+        case VS_ARG_TYPE_I8:
+            e["val"] = std::get<VS_ARG_TYPE_I8>(arg.val);
             break;
-        case VEO_STUBS_ARG_TYPE_U8:
-            j.push_back({{"type", arg.type}, {"val", arg.u8}});
+        case VS_ARG_TYPE_U8:
+            e["val"] = std::get<VS_ARG_TYPE_I8>(arg.val);
             break;
-        case VEO_STUBS_ARG_TYPE_DOUBLE:
-            j.push_back({{"type", arg.type}, {"val", arg.d}});
+        case VS_ARG_TYPE_DOUBLE:
+            e["val"] = std::get<VS_ARG_TYPE_DOUBLE>(arg.val);
             break;
-        case VEO_STUBS_ARG_TYPE_FLOAT:
-            j.push_back({{"type", arg.type}, {"val", arg.f}});
+        case VS_ARG_TYPE_FLOAT:
+            e["val"] = std::get<VS_ARG_TYPE_FLOAT>(arg.val);
             break;
         }
+
+        j.push_back(e);
     }
 }
 
@@ -201,43 +197,51 @@ void from_json(const json &j, veo_args &args)
     args.args.clear();
 
     for (const auto &e : j) {
-        veo_arg arg = veo_arg{e["type"]};
+        veo_arg arg;
 
-        switch (arg.type) {
-        case VEO_STUBS_ARG_TYPE_I64:
-            arg.i64 = e["val"];
+        switch (e["type"].get<int32_t>()) {
+        case VS_ARG_TYPE_I64:
+            arg.val = e["val"].get<int64_t>();
             break;
-        case VEO_STUBS_ARG_TYPE_U64:
-            arg.u64 = e["val"];
+        case VS_ARG_TYPE_U64:
+            arg.val = e["val"].get<uint64_t>();
             break;
-        case VEO_STUBS_ARG_TYPE_I32:
-            arg.i32 = e["val"];
+        case VS_ARG_TYPE_I32:
+            arg.val = e["val"].get<int32_t>();
             break;
-        case VEO_STUBS_ARG_TYPE_U32:
-            arg.u32 = e["val"];
+        case VS_ARG_TYPE_U32:
+            arg.val = e["val"].get<uint64_t>();
             break;
-        case VEO_STUBS_ARG_TYPE_I16:
-            arg.i16 = e["val"];
+        case VS_ARG_TYPE_I16:
+            arg.val = e["val"].get<int16_t>();
             break;
-        case VEO_STUBS_ARG_TYPE_U16:
-            arg.u16 = e["val"];
+        case VS_ARG_TYPE_U16:
+            arg.val = e["val"].get<uint64_t>();
             break;
-        case VEO_STUBS_ARG_TYPE_I8:
-            arg.i8 = e["val"];
+        case VS_ARG_TYPE_I8:
+            arg.val = e["val"].get<int8_t>();
             break;
-        case VEO_STUBS_ARG_TYPE_U8:
-            arg.u8 = e["val"];
+        case VS_ARG_TYPE_U8:
+            arg.val = e["val"].get<uint8_t>();
             break;
-        case VEO_STUBS_ARG_TYPE_DOUBLE:
-            arg.d = e["val"];
+        case VS_ARG_TYPE_DOUBLE:
+            arg.val = e["val"].get<double>();
             break;
-        case VEO_STUBS_ARG_TYPE_FLOAT:
-            arg.f = e["val"];
+        case VS_ARG_TYPE_FLOAT:
+            arg.val = e["val"].get<float>();
             break;
         }
 
         args.args.push_back(arg);
     }
+}
+
+template <typename T> int veo_args_set(struct veo_args *ca, int argnum, T val)
+{
+    ca->args.resize(std::max(ca->args.size(), static_cast<size_t>(argnum + 1)));
+    ca->args[argnum].val = val;
+
+    return 0;
 }
 
 bool do_write(int fd, const uint8_t *buf, size_t count)
