@@ -55,7 +55,7 @@ sudo make install
 - [x] `veo_args_alloc`
 - [x] `veo_args_free`
 - [x] `veo_args_clear`
-- [x] `veo_args_set_*` (except `veo_args_set_stack`)
+- [x] `veo_args_set_*`
 - [x] `veo_api_version`
 - [x] `veo_version_string`
 - [ ] `veo_access_pcircvsyc_register`

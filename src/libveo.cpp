@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -18,21 +19,31 @@ static std::vector<veo_proc_handle *> procs;
 
 static void worker(struct veo_thr_ctxt *ctx)
 {
-    json cmd, res;
+    json req, res;
     bool aborted = false;
 
     while (true) {
-        ctx->requests.wait_pop(cmd);
+        ctx->requests.wait_pop(req);
 
-        spdlog::debug("[VH] sending command {}", cmd.dump());
+        // Perform copy-in
+        if (req.contains("copy")) {
+            for (auto &j : req["copy"]) {
+                copy_descriptor desc = j;
+                if (desc.intent == VEO_INTENT_IN ||
+                    desc.intent == VEO_INTENT_INOUT) {
+                    j["data"] = std::vector<uint8_t>(desc.vh_ptr,
+                                                     desc.vh_ptr + desc.len);
+                }
+            }
+        }
 
-        if (!send_msg(ctx->sock, cmd)) {
+        if (!send_msg(ctx->sock, req)) {
             spdlog::error("[VH] failed to send command to VE");
             aborted = true;
             break;
         }
 
-        if (cmd["cmd"] == VS_CMD_CLOSE_CONTEXT || cmd["cmd"] == VS_CMD_QUIT) {
+        if (req["cmd"] == VS_CMD_CLOSE_CONTEXT || req["cmd"] == VS_CMD_QUIT) {
             break;
         }
 
@@ -43,6 +54,17 @@ static void worker(struct veo_thr_ctxt *ctx)
         }
 
         spdlog::debug("[VH] received result {}", res.dump());
+
+        // Perform copy-out
+        if (res.contains("copy")) {
+            for (const copy_descriptor &descr : res["copy"]) {
+                if (descr.intent == VEO_INTENT_OUT ||
+                    descr.intent == VEO_INTENT_INOUT) {
+                    std::copy(descr.data.begin(), descr.data.end(),
+                              descr.vh_ptr);
+                }
+            }
+        }
 
         {
             std::lock_guard<std::mutex> lock(ctx->results_mtx);
@@ -341,29 +363,50 @@ int veo_context_close(struct veo_thr_ctxt *ctx)
     return 0;
 }
 
+static json copy_descs_for_stack_args(struct veo_args *argp)
+{
+    json copy = json::array();
+
+    for (const auto &arg : argp->args) {
+        if (arg.val.index() != VS_ARG_TYPE_STACK) continue;
+        stack_arg sa = std::get<stack_arg>(arg.val);
+
+        copy.push_back(copy_descriptor{
+            sa.inout, NULL, reinterpret_cast<uint8_t *>(sa.buff), sa.len});
+    }
+
+    return copy;
+}
+
 uint64_t veo_call_async(struct veo_thr_ctxt *ctx, uint64_t addr,
-                        struct veo_args *args)
+                        struct veo_args *argp)
 {
     uint64_t reqid = ctx->issue_reqid();
 
-    ctx->submit_request({{"cmd", VS_CMD_CALL_ASYNC},
-                         {"reqid", reqid},
-                         {"addr", addr},
-                         {"args", *args}});
+    json req = {{"cmd", VS_CMD_CALL_ASYNC},
+                {"reqid", reqid},
+                {"addr", addr},
+                {"args", *argp},
+                {"copy", copy_descs_for_stack_args(argp)}};
+
+    ctx->submit_request(req);
 
     return reqid;
 }
 
 uint64_t veo_call_async_by_name(struct veo_thr_ctxt *ctx, uint64_t libhdl,
-                                const char *symname, struct veo_args *args)
+                                const char *symname, struct veo_args *argp)
 {
     uint64_t reqid = ctx->issue_reqid();
 
-    ctx->submit_request({{"cmd", VS_CMD_CALL_ASYNC_BY_NAME},
-                         {"reqid", reqid},
-                         {"libhdl", libhdl},
-                         {"symname", symname},
-                         {"args", *args}});
+    json req = {{"cmd", VS_CMD_CALL_ASYNC_BY_NAME},
+                {"reqid", reqid},
+                {"libhdl", libhdl},
+                {"symname", symname},
+                {"args", *argp},
+                {"copy", copy_descs_for_stack_args(argp)}};
+
+    ctx->submit_request(req);
 
     return reqid;
 }
@@ -498,7 +541,7 @@ int veo_args_set_float(struct veo_args *ca, int argnum, float val)
 int veo_args_set_stack(veo_args *ca, enum veo_args_intent inout, int argnum,
                        char *buff, size_t len)
 {
-    return 0;
+    return veo_args_set(ca, argnum, stack_arg{inout, buff, len});
 }
 
 int veo_api_version(void) { return VEO_API_VERSION; }

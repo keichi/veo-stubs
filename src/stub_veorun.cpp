@@ -81,7 +81,7 @@ static void handle_write_mem(int sock, const json &req)
     send_msg(sock, {{"result", 0}, {"reqid", req["reqid"]}});
 }
 
-static uint64_t _call_func(void *fn, struct veo_args *args)
+static uint64_t _call_func(const void *fn, struct veo_args *args)
 {
     ffi_cif cif;
     std::vector<ffi_type *> arg_types;
@@ -129,6 +129,10 @@ static uint64_t _call_func(void *fn, struct veo_args *args)
             arg_types.push_back(&ffi_type_float);
             arg_values.push_back(std::get_if<VS_ARG_TYPE_FLOAT>(&arg.val));
             break;
+        case VS_ARG_TYPE_STACK:
+            arg_types.push_back(&ffi_type_uint64);
+            arg_values.push_back(&std::get<VS_ARG_TYPE_STACK>(arg.val).buff);
+            break;
         }
     }
 
@@ -141,26 +145,59 @@ static uint64_t _call_func(void *fn, struct veo_args *args)
     return res;
 }
 
+static void handle_call_common(int sock, const json &req, const void *fn)
+{
+    struct veo_args argp = req["args"];
+    const std::vector<copy_descriptor> copy_descs = req["copy"];
+
+    int i = 0;
+    for (auto &arg : argp.args) {
+        if (arg.val.index() != VS_ARG_TYPE_STACK) continue;
+
+        auto sa = std::get_if<VS_ARG_TYPE_STACK>(&arg.val);
+
+        sa->buff = reinterpret_cast<char *>(alloca(sa->len));
+
+        auto descr = copy_descs[i++];
+        if (sa->inout == VEO_INTENT_IN || sa->inout == VEO_INTENT_INOUT) {
+            std::copy(descr.data.begin(), descr.data.end(), sa->buff);
+        }
+    }
+
+    uint64_t res = _call_func(fn, &argp);
+
+    i = 0;
+    json copy = json::array();
+    for (auto &arg : argp.args) {
+        if (arg.val.index() != VS_ARG_TYPE_STACK) continue;
+
+        auto sa = std::get_if<VS_ARG_TYPE_STACK>(&arg.val);
+        auto descr = copy_descs[i++];
+
+        if (sa->inout == VEO_INTENT_OUT || sa->inout == VEO_INTENT_INOUT) {
+            descr.data.resize(descr.len);
+            std::copy(sa->buff, sa->buff + sa->len, descr.data.begin());
+            copy.push_back(descr);
+        }
+    }
+
+    send_msg(sock, {{"result", res}, {"reqid", req["reqid"]}, {"copy", copy}});
+}
+
 static void handle_call_async(int sock, const json &req)
 {
     void *fn = reinterpret_cast<void *>(req["addr"].get<uint64_t>());
-    struct veo_args args = req["args"];
 
-    uint64_t res = _call_func(fn, &args);
-
-    send_msg(sock, {{"result", res}, {"reqid", req["reqid"]}});
+    handle_call_common(sock, req, fn);
 }
 
 static void handle_call_async_by_name(int sock, const json &req)
 {
     void *libhdl = reinterpret_cast<void *>((req["libhdl"].get<uint64_t>()));
     void *fn = dlsym(libhdl, req["symname"].get<std::string>().c_str());
-    // TODO print dlerror() if fn is NULL
-    struct veo_args args = req["args"];
+    // TODO print dlerror() on error
 
-    uint64_t res = _call_func(fn, &args);
-
-    send_msg(sock, {{"result", res}, {"reqid", req["reqid"]}});
+    handle_call_common(sock, req, fn);
 }
 
 static void handle_quit(int sock, json req) {}
@@ -176,7 +213,7 @@ static void worker(int server_sock, int worker_sock)
 
         recv_msg(worker_sock, req);
 
-        spdlog::debug("[VE] received {}", req.dump());
+        spdlog::debug("[VE] received command {}", req.dump());
 
         switch (req["cmd"].get<int32_t>()) {
         case VS_CMD_LOAD_LIBRARY:

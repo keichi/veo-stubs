@@ -1,3 +1,4 @@
+#include <memory>
 #include <random>
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
@@ -451,5 +452,129 @@ TEST_CASE("Call a VE function that aborts")
 
     veo_unload_library(proc, handle);
     veo_context_close(ctx);
+    veo_proc_destroy(proc);
+}
+
+TEST_CASE("Copy in data to stack")
+{
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    REQUIRE(proc != NULL);
+
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
+    REQUIRE(handle > 0);
+
+    uint64_t addr = veo_get_sym(proc, handle, "add1");
+    REQUIRE(addr > 0);
+
+    int a = 123, b = 456;
+
+    struct veo_args *argp = veo_args_alloc();
+    veo_args_set_stack(argp, VEO_INTENT_IN, 0, reinterpret_cast<char *>(&a),
+                       sizeof(a));
+    veo_args_set_stack(argp, VEO_INTENT_IN, 1, reinterpret_cast<char *>(&b),
+                       sizeof(b));
+
+    uint64_t retval;
+    REQUIRE(veo_call_sync(proc, addr, argp, &retval) == 0);
+
+    REQUIRE(retval == 579);
+
+    veo_args_free(argp);
+
+    veo_unload_library(proc, handle);
+    veo_proc_destroy(proc);
+}
+
+TEST_CASE("Copy out data from stack")
+{
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    REQUIRE(proc != NULL);
+
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
+    REQUIRE(handle > 0);
+
+    uint64_t addr = veo_get_sym(proc, handle, "add2");
+    REQUIRE(addr > 0);
+
+    int a = 123, b = 456, c = 0;
+
+    struct veo_args *argp = veo_args_alloc();
+    veo_args_set_stack(argp, VEO_INTENT_OUT, 0, reinterpret_cast<char *>(&c),
+                       sizeof(c));
+    veo_args_set_stack(argp, VEO_INTENT_IN, 1, reinterpret_cast<char *>(&a),
+                       sizeof(a));
+    veo_args_set_stack(argp, VEO_INTENT_IN, 2, reinterpret_cast<char *>(&b),
+                       sizeof(b));
+
+    uint64_t retval;
+    REQUIRE(veo_call_sync(proc, addr, argp, &retval) == 0);
+
+    REQUIRE(c == 579);
+
+    veo_args_free(argp);
+
+    veo_unload_library(proc, handle);
+    veo_proc_destroy(proc);
+}
+
+TEST_CASE("Copy out data from stack")
+{
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    REQUIRE(proc != NULL);
+
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
+    REQUIRE(handle > 0);
+
+    uint64_t addr = veo_get_sym(proc, handle, "add2");
+    REQUIRE(addr > 0);
+
+    int a = 123, b = 456, sum = 0;
+
+    struct veo_args *argp = veo_args_alloc();
+    veo_args_set_stack(argp, VEO_INTENT_OUT, 0, reinterpret_cast<char *>(&sum),
+                       sizeof(sum));
+    veo_args_set_stack(argp, VEO_INTENT_IN, 1, reinterpret_cast<char *>(&a),
+                       sizeof(a));
+    veo_args_set_stack(argp, VEO_INTENT_IN, 2, reinterpret_cast<char *>(&b),
+                       sizeof(b));
+
+    uint64_t retval;
+    REQUIRE(veo_call_sync(proc, addr, argp, &retval) == 0);
+
+    REQUIRE(sum == 579);
+
+    veo_args_free(argp);
+
+    veo_unload_library(proc, handle);
+    veo_proc_destroy(proc);
+}
+
+TEST_CASE("Copy in and out data from stack")
+{
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    REQUIRE(proc != NULL);
+
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
+    REQUIRE(handle > 0);
+
+    uint64_t addr = veo_get_sym(proc, handle, "add3");
+    REQUIRE(addr > 0);
+
+    int a = 123, sum = 456;
+
+    struct veo_args *argp = veo_args_alloc();
+    veo_args_set_stack(argp, VEO_INTENT_INOUT, 0,
+                       reinterpret_cast<char *>(&sum), sizeof(sum));
+    veo_args_set_stack(argp, VEO_INTENT_IN, 1, reinterpret_cast<char *>(&a),
+                       sizeof(a));
+
+    uint64_t retval;
+    REQUIRE(veo_call_sync(proc, addr, argp, &retval) == 0);
+
+    REQUIRE(sum == 579);
+
+    veo_args_free(argp);
+
+    veo_unload_library(proc, handle);
     veo_proc_destroy(proc);
 }

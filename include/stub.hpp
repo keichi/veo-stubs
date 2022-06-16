@@ -43,6 +43,7 @@ enum veo_stubs_arg_type {
     VS_ARG_TYPE_U8,
     VS_ARG_TYPE_DOUBLE,
     VS_ARG_TYPE_FLOAT,
+    VS_ARG_TYPE_STACK,
 };
 
 struct veo_proc_handle {
@@ -55,7 +56,7 @@ struct veo_proc_handle {
     veo_proc_handle(int32_t venode, pid_t pid) : venode(venode), pid(pid) {}
 };
 
-template <typename T> class BlockingQueue
+template <typename T> class blocking_queue
 {
     std::queue<T> queue;
     std::mutex mtx;
@@ -87,7 +88,7 @@ struct veo_thr_ctxt {
     std::thread comm_thread;
     std::atomic<bool> is_running;
 
-    BlockingQueue<json> requests;
+    blocking_queue<json> requests;
     uint64_t num_reqs;
 
     std::unordered_map<uint64_t, json> results;
@@ -138,9 +139,55 @@ struct veo_thr_ctxt {
     }
 };
 
+struct copy_descriptor {
+    veo_args_intent intent;
+    uint8_t *ve_ptr;
+    uint8_t *vh_ptr;
+    size_t len;
+    std::vector<uint8_t> data;
+};
+
+void to_json(json &j, const copy_descriptor &arg)
+{
+    j["intent"] = arg.intent;
+    j["ve_ptr"] = reinterpret_cast<uint64_t>(arg.ve_ptr);
+    j["vh_ptr"] = reinterpret_cast<uint64_t>(arg.vh_ptr);
+    j["len"] = arg.len;
+    j["data"] = arg.data;
+}
+
+void from_json(const json &j, copy_descriptor &arg)
+{
+    arg.intent = static_cast<veo_args_intent>(j["intent"].get<int32_t>());
+    arg.ve_ptr = reinterpret_cast<uint8_t *>(j["ve_ptr"].get<uint64_t>());
+    arg.vh_ptr = reinterpret_cast<uint8_t *>(j["vh_ptr"].get<uint64_t>());
+    arg.len = j["len"].get<uint64_t>();
+    arg.data = j["data"].get<std::vector<uint8_t>>();
+}
+
+struct stack_arg {
+    veo_args_intent inout;
+    char *buff;
+    size_t len;
+};
+
+void to_json(json &j, const stack_arg &arg)
+{
+    j["inout"] = arg.inout;
+    j["buff"] = reinterpret_cast<uint64_t>(arg.buff);
+    j["len"] = arg.len;
+}
+
+void from_json(const json &j, stack_arg &arg)
+{
+    arg.inout = static_cast<veo_args_intent>(j["inout"].get<int32_t>());
+    arg.buff = reinterpret_cast<char *>(j["buff"].get<uint64_t>());
+    arg.len = j["len"].get<size_t>();
+}
+
 struct veo_arg {
     std::variant<int64_t, uint64_t, int32_t, uint32_t, int16_t, uint16_t,
-                 int8_t, uint8_t, double, float>
+                 int8_t, uint8_t, double, float, stack_arg>
         val;
 };
 
@@ -148,11 +195,11 @@ struct veo_args {
     std::vector<veo_arg> args;
 };
 
-void to_json(json &j, const veo_args &args)
+void to_json(json &j, const veo_args &argp)
 {
     j = json::array();
 
-    for (const auto &arg : args.args) {
+    for (const auto &arg : argp.args) {
         json e = {{"type", arg.val.index()}};
 
         switch (arg.val.index()) {
@@ -186,16 +233,17 @@ void to_json(json &j, const veo_args &args)
         case VS_ARG_TYPE_FLOAT:
             e["val"] = std::get<VS_ARG_TYPE_FLOAT>(arg.val);
             break;
+        case VS_ARG_TYPE_STACK:
+            e["val"] = std::get<VS_ARG_TYPE_STACK>(arg.val);
+            break;
         }
 
         j.push_back(e);
     }
 }
 
-void from_json(const json &j, veo_args &args)
+void from_json(const json &j, veo_args &argp)
 {
-    args.args.clear();
-
     for (const auto &e : j) {
         veo_arg arg;
 
@@ -230,9 +278,12 @@ void from_json(const json &j, veo_args &args)
         case VS_ARG_TYPE_FLOAT:
             arg.val = e["val"].get<float>();
             break;
+        case VS_ARG_TYPE_STACK:
+            arg.val = e["val"].get<stack_arg>();
+            break;
         }
 
-        args.args.push_back(arg);
+        argp.args.push_back(arg);
     }
 }
 
