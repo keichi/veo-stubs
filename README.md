@@ -50,8 +50,8 @@ sudo make install
 - [x] `veo_call_async_by_name`
 - [x] `veo_call_wait_result`
 - [x] `veo_call_peek_result`
-- [ ] `veo_async_read_mem`
-- [ ] `veo_async_write_mem`
+- [x] `veo_async_read_mem`
+- [x] `veo_async_write_mem`
 - [x] `veo_args_alloc`
 - [x] `veo_args_free`
 - [x] `veo_args_clear`

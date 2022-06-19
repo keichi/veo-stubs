@@ -578,3 +578,98 @@ TEST_CASE("Copy in and out data from stack")
     veo_unload_library(proc, handle);
     veo_proc_destroy(proc);
 }
+
+TEST_CASE("Asynchronously read memory from VE")
+{
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    REQUIRE(proc != NULL);
+
+    struct veo_thr_ctxt *ctx = veo_context_open(proc);
+    REQUIRE(ctx != NULL);
+
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
+    REQUIRE(handle > 0);
+
+    constexpr size_t BUF_SIZE = 1024;
+    uint64_t ve_buf;
+    uint8_t vh_buf[BUF_SIZE];
+
+    veo_alloc_mem(proc, &ve_buf, BUF_SIZE);
+
+    struct veo_args *argp = veo_args_alloc();
+    veo_args_set_u64(argp, 0, ve_buf);
+    veo_args_set_u64(argp, 1, BUF_SIZE);
+
+    uint64_t reqid1 = veo_call_async_by_name(ctx, handle, "iota", argp);
+    REQUIRE(reqid1 > 0);
+
+    uint64_t reqid2 = veo_async_read_mem(ctx, vh_buf, ve_buf, BUF_SIZE);
+    REQUIRE(reqid2 > 0);
+
+    uint64_t retval;
+    REQUIRE(veo_call_wait_result(ctx, reqid1, &retval) == VEO_COMMAND_OK);
+
+    REQUIRE(veo_call_wait_result(ctx, reqid2, &retval) == VEO_COMMAND_OK);
+
+    uint8_t x = 0;
+    for (size_t i = 0; i < BUF_SIZE; i++) {
+        REQUIRE(vh_buf[i] == x++);
+    }
+
+    veo_args_free(argp);
+
+    veo_free_mem(proc, ve_buf);
+
+    veo_unload_library(proc, handle);
+    veo_context_close(ctx);
+    veo_proc_destroy(proc);
+}
+
+TEST_CASE("Asynchronously write memory to VE")
+{
+    std::mt19937 engine(0xdeadbeef);
+    std::uniform_int_distribution<uint8_t> dist;
+
+    constexpr size_t BUF_SIZE = 1024;
+
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    REQUIRE(proc != NULL);
+
+    struct veo_thr_ctxt *ctx = veo_context_open(proc);
+    REQUIRE(ctx != NULL);
+
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
+    REQUIRE(handle > 0);
+
+    uint64_t ve_buf;
+    uint8_t vh_buf[BUF_SIZE];
+
+    veo_alloc_mem(proc, &ve_buf, BUF_SIZE);
+
+    REQUIRE(ve_buf > 0);
+
+    uint64_t reqid1 = veo_async_write_mem(ctx, ve_buf, vh_buf, BUF_SIZE);
+    REQUIRE(reqid1 > 0);
+
+    struct veo_args *argp = veo_args_alloc();
+    veo_args_set_u64(argp, 0, ve_buf);
+    veo_args_set_u64(argp, 1, BUF_SIZE);
+
+    uint64_t reqid2 = veo_call_async_by_name(ctx, handle, "checksum", argp);
+    REQUIRE(reqid2 > 0);
+
+    uint64_t retval;
+    REQUIRE(veo_call_wait_result(ctx, reqid1, &retval) == VEO_COMMAND_OK);
+
+    REQUIRE(veo_call_wait_result(ctx, reqid2, &retval) == VEO_COMMAND_OK);
+
+    REQUIRE(retval == crc32(vh_buf, BUF_SIZE));
+
+    veo_args_free(argp);
+
+    veo_free_mem(proc, ve_buf);
+
+    veo_unload_library(proc, handle);
+    veo_context_close(ctx);
+    veo_proc_destroy(proc);
+}

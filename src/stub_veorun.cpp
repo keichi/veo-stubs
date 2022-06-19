@@ -10,6 +10,7 @@
 #include <spdlog/spdlog.h>
 
 #include "stub.hpp"
+#include "ve_offload.h"
 
 static void handle_load_library(int sock, const json &req)
 {
@@ -200,6 +201,29 @@ static void handle_call_async_by_name(int sock, const json &req)
     handle_call_common(sock, req, fn);
 }
 
+static void handle_async_read_mem(int sock, const json &req)
+{
+    std::vector<copy_descriptor> descs = req["copy"];
+
+    for (auto &desc : descs) {
+        desc.data.resize(desc.len);
+        std::copy(desc.ve_ptr, desc.ve_ptr + desc.len, desc.data.begin());
+    }
+
+    send_msg(sock, {{"result", 0}, {"reqid", req["reqid"]}, {"copy", descs}});
+}
+
+static void handle_async_write_mem(int sock, const json &req)
+{
+    std::vector<copy_descriptor> descs = req["copy"];
+
+    for (auto &desc : descs) {
+        std::copy(desc.data.begin(), desc.data.end(), desc.ve_ptr);
+    }
+
+    send_msg(sock, {{"result", 0}, {"reqid", req["reqid"]}});
+}
+
 static void handle_quit(int sock, json req) {}
 
 static void worker(int server_sock, int worker_sock)
@@ -242,6 +266,12 @@ static void worker(int server_sock, int worker_sock)
             break;
         case VS_CMD_CALL_ASYNC_BY_NAME:
             handle_call_async_by_name(worker_sock, req);
+            break;
+        case VS_CMD_ASYNC_READ_MEM:
+            handle_async_read_mem(worker_sock, req);
+            break;
+        case VS_CMD_ASYNC_WRITE_MEM:
+            handle_async_write_mem(worker_sock, req);
             break;
         case VS_CMD_CLOSE_CONTEXT:
             active = false;

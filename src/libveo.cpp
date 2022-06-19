@@ -440,6 +440,7 @@ int veo_call_wait_result(struct veo_thr_ctxt *ctx, uint64_t reqid,
 
     // TODO return VEO_COMMAND_ERROR if symbol cannot be found
     // TODO return VEO_COMMAND_ERROR if reqid is invalid
+    // TODO what if the command has already finished?
 
     return VEO_COMMAND_OK;
 }
@@ -461,6 +462,41 @@ int veo_call_peek_result(struct veo_thr_ctxt *ctx, uint64_t reqid,
     *retp = result["result"];
 
     return VEO_COMMAND_OK;
+}
+
+uint64_t veo_async_read_mem(struct veo_thr_ctxt *ctx, void *dst, uint64_t src,
+                            size_t size)
+{
+    uint64_t reqid = ctx->issue_reqid();
+
+    copy_descriptor desc{VEO_INTENT_OUT, reinterpret_cast<uint8_t *>(src),
+                         reinterpret_cast<uint8_t *>(dst), size};
+
+    json req = {{"cmd", VS_CMD_ASYNC_READ_MEM},
+                {"reqid", reqid},
+                {"copy", json::array({desc})}};
+
+    ctx->submit_request(req);
+
+    return reqid;
+}
+
+uint64_t veo_async_write_mem(struct veo_thr_ctxt *ctx, uint64_t dst,
+                             const void *src, size_t size)
+{
+    uint64_t reqid = ctx->issue_reqid();
+
+    copy_descriptor desc{VEO_INTENT_IN, reinterpret_cast<uint8_t *>(dst),
+                         reinterpret_cast<uint8_t *>(const_cast<void *>(src)),
+                         size};
+
+    json req = {{"cmd", VS_CMD_ASYNC_WRITE_MEM},
+                {"reqid", reqid},
+                {"copy", json::array({desc})}};
+
+    ctx->submit_request(req);
+
+    return reqid;
 }
 
 int veo_num_contexts(struct veo_proc_handle *proc)
