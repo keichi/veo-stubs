@@ -26,14 +26,11 @@ static void worker(struct veo_thr_ctxt *ctx)
         ctx->requests.wait_pop(req);
 
         // Perform copy-in
-        if (req.contains("copy")) {
-            for (auto &j : req["copy"]) {
+        if (req.contains("copy_in")) {
+            for (auto &j : req["copy_in"]) {
                 copy_descriptor desc = j;
-                if (desc.intent == VEO_INTENT_IN ||
-                    desc.intent == VEO_INTENT_INOUT) {
-                    j["data"] = std::vector<uint8_t>(desc.vh_ptr,
-                                                     desc.vh_ptr + desc.len);
-                }
+                j["data"] =
+                    std::vector<uint8_t>(desc.vh_ptr, desc.vh_ptr + desc.len);
             }
         }
 
@@ -56,13 +53,9 @@ static void worker(struct veo_thr_ctxt *ctx)
         spdlog::debug("[VH] received result {}", res.dump());
 
         // Perform copy-out
-        if (res.contains("copy")) {
-            for (const copy_descriptor &descr : res["copy"]) {
-                if (descr.intent == VEO_INTENT_OUT ||
-                    descr.intent == VEO_INTENT_INOUT) {
-                    std::copy(descr.data.begin(), descr.data.end(),
-                              descr.vh_ptr);
-                }
+        if (res.contains("copy_out")) {
+            for (const copy_descriptor &desc : res["copy_out"]) {
+                std::copy(desc.data.begin(), desc.data.end(), desc.vh_ptr);
             }
         }
 
@@ -363,7 +356,7 @@ int veo_context_close(struct veo_thr_ctxt *ctx)
     return 0;
 }
 
-static json copy_descs_for_stack_args(struct veo_args *argp)
+static json copy_in_for_stack_args(struct veo_args *argp)
 {
     json copy = json::array();
 
@@ -371,8 +364,27 @@ static json copy_descs_for_stack_args(struct veo_args *argp)
         if (arg.val.index() != VS_ARG_TYPE_STACK) continue;
         stack_arg sa = std::get<stack_arg>(arg.val);
 
-        copy.push_back(copy_descriptor{
-            sa.inout, NULL, reinterpret_cast<uint8_t *>(sa.buff), sa.len});
+        if (sa.inout == VEO_INTENT_IN || sa.inout == VEO_INTENT_INOUT) {
+            copy.push_back(copy_descriptor{
+                NULL, reinterpret_cast<uint8_t *>(sa.buff), sa.len});
+        }
+    }
+
+    return copy;
+}
+
+static json copy_out_for_stack_args(struct veo_args *argp)
+{
+    json copy = json::array();
+
+    for (const auto &arg : argp->args) {
+        if (arg.val.index() != VS_ARG_TYPE_STACK) continue;
+        stack_arg sa = std::get<stack_arg>(arg.val);
+
+        if (sa.inout == VEO_INTENT_OUT || sa.inout == VEO_INTENT_INOUT) {
+            copy.push_back(copy_descriptor{
+                NULL, reinterpret_cast<uint8_t *>(sa.buff), sa.len});
+        }
     }
 
     return copy;
@@ -387,7 +399,8 @@ uint64_t veo_call_async(struct veo_thr_ctxt *ctx, uint64_t addr,
                 {"reqid", reqid},
                 {"addr", addr},
                 {"args", *argp},
-                {"copy", copy_descs_for_stack_args(argp)}};
+                {"copy_in", copy_in_for_stack_args(argp)},
+                {"copy_out", copy_out_for_stack_args(argp)}};
 
     ctx->submit_request(req);
 
@@ -404,7 +417,8 @@ uint64_t veo_call_async_by_name(struct veo_thr_ctxt *ctx, uint64_t libhdl,
                 {"libhdl", libhdl},
                 {"symname", symname},
                 {"args", *argp},
-                {"copy", copy_descs_for_stack_args(argp)}};
+                {"copy_in", copy_in_for_stack_args(argp)},
+                {"copy_out", copy_out_for_stack_args(argp)}};
 
     ctx->submit_request(req);
 
@@ -417,9 +431,8 @@ int veo_call_sync(struct veo_proc_handle *proc, uint64_t addr,
     struct veo_thr_ctxt *ctx = proc->default_context;
 
     uint64_t reqid = veo_call_async(ctx, addr, args);
-    veo_call_wait_result(ctx, reqid, result);
 
-    return 0;
+    return veo_call_wait_result(ctx, reqid, result);
 }
 
 // TODO how do we now this reqid is valid?
@@ -469,12 +482,12 @@ uint64_t veo_async_read_mem(struct veo_thr_ctxt *ctx, void *dst, uint64_t src,
 {
     uint64_t reqid = ctx->issue_reqid();
 
-    copy_descriptor desc{VEO_INTENT_OUT, reinterpret_cast<uint8_t *>(src),
+    copy_descriptor desc{reinterpret_cast<uint8_t *>(src),
                          reinterpret_cast<uint8_t *>(dst), size};
 
     json req = {{"cmd", VS_CMD_ASYNC_READ_MEM},
                 {"reqid", reqid},
-                {"copy", json::array({desc})}};
+                {"copy_out", json::array({desc})}};
 
     ctx->submit_request(req);
 
@@ -486,13 +499,13 @@ uint64_t veo_async_write_mem(struct veo_thr_ctxt *ctx, uint64_t dst,
 {
     uint64_t reqid = ctx->issue_reqid();
 
-    copy_descriptor desc{VEO_INTENT_IN, reinterpret_cast<uint8_t *>(dst),
+    copy_descriptor desc{reinterpret_cast<uint8_t *>(dst),
                          reinterpret_cast<uint8_t *>(const_cast<void *>(src)),
                          size};
 
     json req = {{"cmd", VS_CMD_ASYNC_WRITE_MEM},
                 {"reqid", reqid},
-                {"copy", json::array({desc})}};
+                {"copy_in", json::array({desc})}};
 
     ctx->submit_request(req);
 

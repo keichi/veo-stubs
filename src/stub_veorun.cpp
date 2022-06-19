@@ -149,7 +149,8 @@ static uint64_t _call_func(const void *fn, struct veo_args *args)
 static void handle_call_common(int sock, const json &req, const void *fn)
 {
     struct veo_args argp = req["args"];
-    const std::vector<copy_descriptor> copy_descs = req["copy"];
+    std::vector<copy_descriptor> copy_in = req["copy_in"];
+    std::vector<copy_descriptor> copy_out = req["copy_out"];
 
     int i = 0;
     for (auto &arg : argp.args) {
@@ -159,30 +160,30 @@ static void handle_call_common(int sock, const json &req, const void *fn)
 
         sa->buff = reinterpret_cast<char *>(alloca(sa->len));
 
-        auto descr = copy_descs[i++];
         if (sa->inout == VEO_INTENT_IN || sa->inout == VEO_INTENT_INOUT) {
-            std::copy(descr.data.begin(), descr.data.end(), sa->buff);
+            auto &desc = copy_in[i++];
+            std::copy(desc.data.begin(), desc.data.end(), sa->buff);
         }
     }
 
     uint64_t res = _call_func(fn, &argp);
 
     i = 0;
-    json copy = json::array();
     for (auto &arg : argp.args) {
         if (arg.val.index() != VS_ARG_TYPE_STACK) continue;
 
         auto sa = std::get_if<VS_ARG_TYPE_STACK>(&arg.val);
-        auto descr = copy_descs[i++];
 
         if (sa->inout == VEO_INTENT_OUT || sa->inout == VEO_INTENT_INOUT) {
-            descr.data.resize(descr.len);
-            std::copy(sa->buff, sa->buff + sa->len, descr.data.begin());
-            copy.push_back(descr);
+            auto &desc = copy_out[i++];
+            desc.data.resize(desc.len);
+            std::copy(sa->buff, sa->buff + sa->len, desc.data.begin());
         }
     }
 
-    send_msg(sock, {{"result", res}, {"reqid", req["reqid"]}, {"copy", copy}});
+    send_msg(
+        sock,
+        {{"result", res}, {"reqid", req["reqid"]}, {"copy_out", copy_out}});
 }
 
 static void handle_call_async(int sock, const json &req)
@@ -203,19 +204,20 @@ static void handle_call_async_by_name(int sock, const json &req)
 
 static void handle_async_read_mem(int sock, const json &req)
 {
-    std::vector<copy_descriptor> descs = req["copy"];
+    std::vector<copy_descriptor> descs = req["copy_out"];
 
     for (auto &desc : descs) {
         desc.data.resize(desc.len);
         std::copy(desc.ve_ptr, desc.ve_ptr + desc.len, desc.data.begin());
     }
 
-    send_msg(sock, {{"result", 0}, {"reqid", req["reqid"]}, {"copy", descs}});
+    send_msg(sock,
+             {{"result", 0}, {"reqid", req["reqid"]}, {"copy_out", descs}});
 }
 
 static void handle_async_write_mem(int sock, const json &req)
 {
-    std::vector<copy_descriptor> descs = req["copy"];
+    std::vector<copy_descriptor> descs = req["copy_in"];
 
     for (auto &desc : descs) {
         std::copy(desc.data.begin(), desc.data.end(), desc.ve_ptr);

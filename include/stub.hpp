@@ -142,7 +142,6 @@ struct veo_thr_ctxt {
 };
 
 struct copy_descriptor {
-    veo_args_intent intent;
     uint8_t *ve_ptr;
     uint8_t *vh_ptr;
     size_t len;
@@ -151,7 +150,6 @@ struct copy_descriptor {
 
 void to_json(json &j, const copy_descriptor &arg)
 {
-    j["intent"] = arg.intent;
     j["ve_ptr"] = reinterpret_cast<uint64_t>(arg.ve_ptr);
     j["vh_ptr"] = reinterpret_cast<uint64_t>(arg.vh_ptr);
     j["len"] = arg.len;
@@ -160,7 +158,6 @@ void to_json(json &j, const copy_descriptor &arg)
 
 void from_json(const json &j, copy_descriptor &arg)
 {
-    arg.intent = static_cast<veo_args_intent>(j["intent"].get<int32_t>());
     arg.ve_ptr = reinterpret_cast<uint8_t *>(j["ve_ptr"].get<uint64_t>());
     arg.vh_ptr = reinterpret_cast<uint8_t *>(j["vh_ptr"].get<uint64_t>());
     arg.len = j["len"].get<uint64_t>();

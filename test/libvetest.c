@@ -28,10 +28,19 @@ uint64_t raise_sigabrt()
     return 0;
 }
 
-uint64_t add1(const int32_t *a, const int32_t *b) { return *a + *b; }
+uint64_t add1(const int32_t *a, const int32_t *b)
+{
+    printf("a: %p *a: %d\n", a, *a);
+    printf("b: %p *b: %d\n", b, *b);
+    return *a + *b;
+}
 
 uint64_t add2(int32_t *sum, const int32_t *a, const int32_t *b)
 {
+    printf("a: %p *a: %d\n", a, *a);
+    printf("b: %p *b: %d\n", b, *b);
+    printf("sum: %p *sum: %d\n", sum, *sum);
+
     *sum = *a + *b;
 
     return 0;
