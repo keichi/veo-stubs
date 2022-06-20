@@ -229,6 +229,12 @@ static void handle_async_write_mem(int sock, const json &req)
 
 static void handle_quit(int sock, json req) {}
 
+static void close_server_sock(int server_sock)
+{
+    shutdown(server_sock, SHUT_RDWR);
+    close(server_sock);
+}
+
 static void worker(int server_sock, int worker_sock)
 {
     bool active = true;
@@ -238,7 +244,13 @@ static void worker(int server_sock, int worker_sock)
     while (active) {
         json req;
 
-        recv_msg(worker_sock, req);
+        if (!recv_msg(worker_sock, req)) {
+            // We reach here if the VH disconnects unexpectedly. This usually
+            // means that the VH crashed, so we clean up and exit.
+            spdlog::error("[VE] failed to receive command from VH");
+            close_server_sock(server_sock);
+            break;
+        }
 
         spdlog::debug("[VE] received command {}", req.dump());
 
@@ -282,8 +294,7 @@ static void worker(int server_sock, int worker_sock)
         case VS_CMD_QUIT:
             handle_quit(worker_sock, req);
             active = false;
-            shutdown(server_sock, SHUT_RDWR);
-            close(server_sock);
+            close_server_sock(server_sock);
             break;
         default:
             break;
