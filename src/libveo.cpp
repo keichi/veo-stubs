@@ -159,7 +159,8 @@ struct veo_proc_handle *veo_proc_create_static(int venode, char *tmp_veobin)
 int veo_proc_destroy(struct veo_proc_handle *proc)
 {
     // Close all open thread contexts
-    for (const auto ctx : proc->contexts) {
+    std::vector<struct veo_thr_ctxt *> ctxts = proc->contexts;
+    for (auto ctx : ctxts) {
         veo_context_close(ctx);
     }
 
