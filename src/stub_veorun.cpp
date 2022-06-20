@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <ffi.h>
+#include <spdlog/cfg/env.h>
 #include <spdlog/spdlog.h>
 
 #include "stub.hpp"
@@ -296,7 +297,7 @@ static void worker(int server_sock, int worker_sock)
 
 int main(int argc, char *argv[])
 {
-    spdlog::set_level(spdlog::level::debug);
+    spdlog::cfg::load_env_levels();
 
     const std::string sock_path =
         "/tmp/stub-veorun." + std::to_string(getpid()) + ".sock";

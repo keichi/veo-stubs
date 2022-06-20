@@ -8,6 +8,7 @@
 #include <thread>
 #include <unistd.h>
 
+#include <spdlog/cfg/env.h>
 #include <spdlog/spdlog.h>
 
 #include "stub.hpp"
@@ -117,7 +118,7 @@ static veo_thr_ctxt *_veo_context_open(struct veo_proc_handle *proc)
 struct veo_proc_handle *veo_proc_create(int venode)
 {
     // TODO call this in an __attribute__((constructor)) function?
-    spdlog::set_level(spdlog::level::debug);
+    spdlog::cfg::load_env_levels();
 
     pid_t child_pid = fork();
 
