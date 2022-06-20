@@ -29,8 +29,10 @@ target_link_libraries(veo PRIVATE nlohmann_json::nlohmann_json)
 target_link_libraries(veo PRIVATE spdlog::spdlog)
 
 # Installation rules
-install(TARGETS stub-veorun)
-install(TARGETS veo)
+set(CMAKE_INSTALL_LIBDIR lib64)
+install(TARGETS stub-veorun DESTINATION ${CMAKE_INSTALL_LIBEXECDIR})
+install(TARGETS veo LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 # CPack
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Keichi Takahashi <hello@keichi.dev>")
