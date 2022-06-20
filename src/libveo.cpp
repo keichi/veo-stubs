@@ -334,6 +334,11 @@ struct veo_thr_ctxt *veo_context_open(struct veo_proc_handle *proc)
 
 int veo_context_close(struct veo_thr_ctxt *ctx)
 {
+    // Do nothing if the context has already exited
+    if (!ctx->is_running) {
+        return 0;
+    }
+
     struct veo_proc_handle *proc = ctx->proc;
 
     const auto it =
