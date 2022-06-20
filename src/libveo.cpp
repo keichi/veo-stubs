@@ -150,8 +150,19 @@ struct veo_proc_handle *veo_proc_create(int venode)
     }
 }
 
+struct veo_proc_handle *veo_proc_create_static(int venode, char *tmp_veobin)
+{
+    // Not implemented
+    return NULL;
+}
+
 int veo_proc_destroy(struct veo_proc_handle *proc)
 {
+    // Close all open thread contexts
+    for (const auto ctx : proc->contexts) {
+        veo_context_close(ctx);
+    }
+
     proc->default_context->submit_request({{"cmd", VS_CMD_QUIT}});
 
     spdlog::debug("[VH] Waiting for VE to quit");
