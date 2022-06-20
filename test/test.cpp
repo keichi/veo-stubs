@@ -7,7 +7,7 @@
 #include "crc32.h"
 #include "ve_offload.h"
 
-TEST_CASE("Create and destroy a VE proc handle")
+TEST_CASE("Create and destroy a proc handle")
 {
     struct veo_proc_handle *proc = veo_proc_create(0);
 
@@ -17,13 +17,14 @@ TEST_CASE("Create and destroy a VE proc handle")
     veo_proc_destroy(proc);
 }
 
-TEST_CASE("Create and destroy multiple VE proc handles")
+TEST_CASE("Create and destroy multiple proc handles")
 {
     struct veo_proc_handle *proc1 = veo_proc_create(0);
     struct veo_proc_handle *proc2 = veo_proc_create(1);
 
     REQUIRE(proc1 != NULL);
     REQUIRE(proc2 != NULL);
+    REQUIRE(proc1 != proc2);
 
     REQUIRE(veo_proc_identifier(proc1) == 0);
     REQUIRE(veo_proc_identifier(proc2) == 1);
@@ -32,7 +33,7 @@ TEST_CASE("Create and destroy multiple VE proc handles")
     veo_proc_destroy(proc2);
 }
 
-TEST_CASE("Create and destroy a VE thread context")
+TEST_CASE("Create and close a thread context")
 {
     struct veo_proc_handle *proc = veo_proc_create(0);
     REQUIRE(proc != NULL);
@@ -43,7 +44,7 @@ TEST_CASE("Create and destroy a VE thread context")
     veo_proc_destroy(proc);
 }
 
-TEST_CASE("Create and destroy mutliple VE thread contexts")
+TEST_CASE("Create and close mutliple thread contexts")
 {
     constexpr size_t REP = 10;
 
@@ -70,6 +71,36 @@ TEST_CASE("Create and destroy mutliple VE thread contexts")
     }
 
     veo_proc_destroy(proc);
+}
+
+TEST_CASE("Destroy a proc handle and do not close associated contexts")
+{
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    REQUIRE(proc != NULL);
+
+    struct veo_thr_ctxt *ctx1 = veo_context_open(proc);
+    REQUIRE(ctx1 != NULL);
+
+    struct veo_thr_ctxt *ctx2 = veo_context_open(proc);
+    REQUIRE(ctx2 != NULL);
+
+    REQUIRE(ctx1 != ctx2);
+
+    veo_proc_destroy(proc);
+}
+
+TEST_CASE("Destroy a proc handle before closing associated contexts")
+{
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    REQUIRE(proc != NULL);
+
+    struct veo_thr_ctxt *ctx1 = veo_context_open(proc);
+    struct veo_thr_ctxt *ctx2 = veo_context_open(proc);
+
+    veo_proc_destroy(proc);
+
+    veo_context_close(ctx1);
+    veo_context_close(ctx2);
 }
 
 TEST_CASE("Allocate and free VE memory")
