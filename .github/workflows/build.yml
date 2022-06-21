@@ -1,0 +1,119 @@
+name: build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+
+    env:
+      BUILD_TYPE: Debug
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macOS-latest
+        sanitizer:
+          - ""
+          - "-fsanitize=address"
+          - "-fsanitize=thread"
+          - "-fsanitize=undefined"
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+
+    - name: Configure CMake
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+      env:
+        CFLAGS: ${{ matrix.sanitizer }}
+        CXXFLAGS: ${{ matrix.sanitizer }}
+
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+
+    - name: Test
+      working-directory: ${{github.workspace}}/build
+      run: ctest -C ${{env.BUILD_TYPE}} --output-on-failure
+      env:
+        SPDLOG_LEVEL: debug
+
+  build-rpm:
+    needs: build-and-test
+
+    runs-on: ubuntu-latest
+    container:
+      image: centos:7
+
+    env:
+      BUILD_TYPE: RelWithDebInfo
+
+    steps:
+    - name: Install dependencies
+      run: |
+        yum install -y epel-release centos-release-scl
+        yum install -y https://repo.ius.io/ius-release-el7.rpm
+        yum install -y git236 devtoolset-11-gcc-c++ make cmake3 libffi-devel rpm-build
+
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+
+    - name: Configure CMake
+      run: cmake3 -B build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+      env:
+        CC: /opt/rh/devtoolset-11/root/bin/gcc 
+        CXX: /opt/rh/devtoolset-11/root/bin/g++
+
+    - name: Build
+      run: cmake3 --build build --config ${{env.BUILD_TYPE}}
+
+    - name: Package
+      run: cpack3 -G RPM
+      working-directory: build
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: packages
+        path: build/*.rpm
+
+  build-deb:
+    needs: build-and-test
+
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
+
+    steps:
+    - name: Install dependencies
+      run: |
+        apt-get update
+        apt-get install -y git gcc g++ cmake make pkg-config libffi-dev
+      env:
+        DEBIAN_FRONTEND: noninteractive
+
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+
+    - name: Build
+      run: cmake --build build --config ${{env.BUILD_TYPE}}
+
+    - name: Package
+      run: cpack -G DEB
+      working-directory: build
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: packages
+        path: build/*.deb
