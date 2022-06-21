@@ -52,4 +52,5 @@ set_target_properties(vetest PROPERTIES SUFFIX ".so")
 
 enable_testing()
 include(thirdparty/doctest/scripts/cmake/doctest.cmake)
-doctest_discover_tests(veo-test PROPERTIES ENVIRONMENT "VEORUN_BIN=./stub-veorun")
+doctest_discover_tests(veo-test PROPERTIES ENVIRONMENT "SPDLOG_LEVEL=debug"
+                       ENVIRONMENT "VEORUN_BIN=./stub-veorun")

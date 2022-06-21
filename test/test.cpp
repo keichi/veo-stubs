@@ -73,7 +73,7 @@ TEST_CASE("Create and close mutliple thread contexts")
     veo_proc_destroy(proc);
 }
 
-TEST_CASE("Destroy a proc handle and do not close associated contexts")
+TEST_CASE("Destroy a proc handle without closing associated contexts")
 {
     struct veo_proc_handle *proc = veo_proc_create(0);
     REQUIRE(proc != NULL);
@@ -87,20 +87,6 @@ TEST_CASE("Destroy a proc handle and do not close associated contexts")
     REQUIRE(ctx1 != ctx2);
 
     veo_proc_destroy(proc);
-}
-
-TEST_CASE("Destroy a proc handle before closing associated contexts")
-{
-    struct veo_proc_handle *proc = veo_proc_create(0);
-    REQUIRE(proc != NULL);
-
-    struct veo_thr_ctxt *ctx1 = veo_context_open(proc);
-    struct veo_thr_ctxt *ctx2 = veo_context_open(proc);
-
-    veo_proc_destroy(proc);
-
-    veo_context_close(ctx1);
-    veo_context_close(ctx2);
 }
 
 TEST_CASE("Allocate and free VE memory")

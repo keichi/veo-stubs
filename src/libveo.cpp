@@ -17,6 +17,7 @@
 extern "C" {
 
 static std::vector<veo_proc_handle *> procs;
+static std::unordered_map<veo_proc_handle *, veo_thr_ctxt *> ctxts;
 
 static void worker(struct veo_thr_ctxt *ctx)
 {
@@ -164,7 +165,10 @@ int veo_proc_destroy(struct veo_proc_handle *proc)
         veo_context_close(ctx);
     }
 
-    proc->default_context->submit_request({{"cmd", VS_CMD_QUIT}});
+    struct veo_thr_ctxt *ctx = proc->default_context;
+    uint64_t reqid = ctx->issue_reqid();
+
+    ctx->submit_request({{"cmd", VS_CMD_QUIT}, {"reqid", reqid}});
 
     spdlog::debug("[VH] Waiting for VE to quit");
 
