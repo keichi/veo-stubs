@@ -60,7 +60,7 @@ jobs:
       run: |
         yum install -y epel-release centos-release-scl
         yum install -y https://repo.ius.io/ius-release-el7.rpm
-        yum install -y git236 devtoolset-11-gcc-c++ make cmake3 libffi-devel rpm-build
+        yum install -y git236 devtoolset-9-gcc-c++ make cmake3 libffi-devel rpm-build
 
     - uses: actions/checkout@v3
       with:
@@ -69,8 +69,8 @@ jobs:
     - name: Configure CMake
       run: cmake3 -B build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
       env:
-        CC: /opt/rh/devtoolset-11/root/bin/gcc 
-        CXX: /opt/rh/devtoolset-11/root/bin/g++
+        CC: /opt/rh/devtoolset-9/root/bin/gcc 
+        CXX: /opt/rh/devtoolset-9/root/bin/g++
 
     - name: Build
       run: cmake3 --build build --config ${{env.BUILD_TYPE}}
