@@ -138,9 +138,9 @@ struct veo_proc_handle *veo_proc_create(int venode)
 
         return proc;
     } else {
-        char *VEORUN_BIN_ENV = strdup(getenv("VEORUN_BIN"));
+        char *VEORUN_BIN_ENV = getenv("VEORUN_BIN");
         const char *VEORUN_BIN =
-            VEORUN_BIN_ENV ? VEORUN_BIN_ENV : "stub-veorun";
+            VEORUN_BIN_ENV ? VEORUN_BIN_ENV : "/opt/nec/ve/veos/libexec/stub-veorun";
         const char *argv[] = {VEORUN_BIN, NULL};
 
         execvp(VEORUN_BIN, const_cast<char *const *>(argv));
@@ -184,6 +184,7 @@ int veo_proc_destroy(struct veo_proc_handle *proc)
         procs.erase(it);
     }
 
+    // Technically, proc->pid could be reused by another process.
     const std::string sock_path =
         "/tmp/stub-veorun." + std::to_string(proc->pid) + ".sock";
     unlink(sock_path.c_str());

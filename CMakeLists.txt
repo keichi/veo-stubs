@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-project(veo-stubs)
+project(veo-stubs VERSION 0.1.0)
 include_directories(include)
 
 # Dependencies
@@ -36,10 +36,11 @@ install(TARGETS veo LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 # CPack
-set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Keichi Takahashi <hello@keichi.dev>")
-set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/keichi/veo-stubs")
-set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "VE Offloading API stubs")
+set(CPACK_PACKAGING_INSTALL_PREFIX /opt/nec/ve/veos)
+set(CPACK_PACKAGE_CONTACT "Keichi Takahashi <hello@keichi.dev>")
+set(CPACK_PACKAGE_DESCRIPTION "VE Offloading API stubs")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libffi-dev")
+set(CPACK_RPM_PACKAGE_REQUIRES "libffi-devel")
 include(CPack)
 
 # Tests
