@@ -19,6 +19,10 @@ static void handle_load_library(int sock, const json &req)
 
     void *libhdl = dlopen(libname.c_str(), RTLD_LAZY);
 
+    if (libhdl == NULL) {
+        spdlog::error("[VE] {}", dlerror());
+    }
+
     send_msg(sock, {{"result", reinterpret_cast<uint64_t>(libhdl)},
                     {"reqid", req["reqid"]}});
 }
@@ -38,7 +42,10 @@ static void handle_get_sym(int sock, const json &req)
     std::string symname = req["symname"];
 
     void *fn = dlsym(libhdl, symname.c_str());
-    // TODO print dlerror() if fn is NULL
+
+    if (fn == NULL) {
+        spdlog::error("[VE] {}", dlerror());
+    }
 
     send_msg(sock, {{"result", reinterpret_cast<uint64_t>(fn)},
                     {"reqid", req["reqid"]}});
@@ -198,7 +205,10 @@ static void handle_call_async_by_name(int sock, const json &req)
 {
     void *libhdl = reinterpret_cast<void *>((req["libhdl"].get<uint64_t>()));
     void *fn = dlsym(libhdl, req["symname"].get<std::string>().c_str());
-    // TODO print dlerror() on error
+
+    if (fn == NULL) {
+        spdlog::error("[VE] {}", dlerror());
+    }
 
     handle_call_common(sock, req, fn);
 }
