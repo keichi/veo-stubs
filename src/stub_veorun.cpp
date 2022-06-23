@@ -1,6 +1,7 @@
 #include <dlfcn.h>
 #include <iostream>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <sys/un.h>
 #include <thread>
 #include <unistd.h>
@@ -20,7 +21,7 @@ static void handle_load_library(int sock, const json &req)
     void *libhdl = dlopen(libname.c_str(), RTLD_LAZY);
 
     if (libhdl == NULL) {
-        spdlog::error("[VE] {}", dlerror());
+        spdlog::error("{}", dlerror());
     }
 
     send_msg(sock, {{"result", reinterpret_cast<uint64_t>(libhdl)},
@@ -44,7 +45,7 @@ static void handle_get_sym(int sock, const json &req)
     void *fn = dlsym(libhdl, symname.c_str());
 
     if (fn == NULL) {
-        spdlog::error("[VE] {}", dlerror());
+        spdlog::error("{}", dlerror());
     }
 
     send_msg(sock, {{"result", reinterpret_cast<uint64_t>(fn)},
@@ -207,7 +208,7 @@ static void handle_call_async_by_name(int sock, const json &req)
     void *fn = dlsym(libhdl, req["symname"].get<std::string>().c_str());
 
     if (fn == NULL) {
-        spdlog::error("[VE] {}", dlerror());
+        spdlog::error("{}", dlerror());
     }
 
     handle_call_common(sock, req, fn);
@@ -249,7 +250,7 @@ static void worker(int server_sock, int worker_sock)
 {
     bool active = true;
 
-    spdlog::debug("[VE] starting up worker thread");
+    spdlog::debug("Starting up worker thread");
 
     while (active) {
         json req;
@@ -257,12 +258,12 @@ static void worker(int server_sock, int worker_sock)
         if (!recv_msg(worker_sock, req)) {
             // We reach here if the VH disconnects unexpectedly. This usually
             // means that the VH crashed, so we clean up and exit.
-            spdlog::error("[VE] failed to receive command from VH");
+            spdlog::error("Failed to receive command from VH");
             close_server_sock(server_sock);
             break;
         }
 
-        spdlog::debug("[VE] received command {}", req.dump());
+        spdlog::debug("Received command {}", req.dump());
 
         switch (req["cmd"].get<int32_t>()) {
         case VS_CMD_LOAD_LIBRARY:
@@ -313,12 +314,15 @@ static void worker(int server_sock, int worker_sock)
 
     close(worker_sock);
 
-    spdlog::debug("[VE] shutting down worker thread");
+    spdlog::debug("Shutting down worker thread");
 }
 
 int main(int argc, char *argv[])
 {
     spdlog::cfg::load_env_levels();
+    spdlog::set_pattern("[%^%l%$] [VE] [PID %P] [TID %t] %v");
+
+    spdlog::debug("Starting server");
 
     const std::string sock_path =
         "/tmp/stub-veorun." + std::to_string(getpid()) + ".sock";
@@ -332,12 +336,14 @@ int main(int argc, char *argv[])
 
     if (bind(server_sock, reinterpret_cast<struct sockaddr *>(&server_addr),
              SUN_LEN(&server_addr)) == -1) {
-        spdlog::error("[VE] bind() failed");
+        spdlog::error("Bind() failed");
     }
 
     if (listen(server_sock, 32) == -1) {
-        spdlog::error("[VE] listen() failed");
+        spdlog::error("Listen() failed");
     }
+
+    spdlog::debug("Server is listening at {}", sock_path);
 
     std::vector<std::thread> worker_threads;
 
@@ -345,7 +351,6 @@ int main(int argc, char *argv[])
         int worker_sock = accept(server_sock, NULL, NULL);
 
         if (worker_sock == -1) {
-            spdlog::debug("[VE] shutting down server");
             break;
         }
 
@@ -358,7 +363,7 @@ int main(int argc, char *argv[])
 
     unlink(sock_path.c_str());
 
-    spdlog::debug("[VE] exiting");
+    spdlog::debug("Exiting server");
 
     return 0;
 }

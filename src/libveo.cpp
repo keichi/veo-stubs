@@ -19,6 +19,12 @@ extern "C" {
 static std::vector<veo_proc_handle *> procs;
 static std::unordered_map<veo_proc_handle *, veo_thr_ctxt *> ctxts;
 
+__attribute__((constructor)) void init()
+{
+    spdlog::cfg::load_env_levels();
+    spdlog::set_pattern("[%^%l%$] [VH] [PID %P] [TID %t] %v");
+}
+
 static void worker(struct veo_thr_ctxt *ctx)
 {
     json req, res;
@@ -37,7 +43,7 @@ static void worker(struct veo_thr_ctxt *ctx)
         }
 
         if (!send_msg(ctx->sock, req)) {
-            spdlog::error("[VH] failed to send command to VE");
+            spdlog::error("Failed to send command to VE");
             aborted = true;
             break;
         }
@@ -47,12 +53,12 @@ static void worker(struct veo_thr_ctxt *ctx)
         }
 
         if (!recv_msg(ctx->sock, res)) {
-            spdlog::error("[VH] failed to receive result from VE");
+            spdlog::error("Failed to receive result from VE");
             aborted = true;
             break;
         }
 
-        spdlog::debug("[VH] received result {}", res.dump());
+        spdlog::debug("Received result {}", res.dump());
 
         // Perform copy-out
         if (res.contains("copy_out")) {
@@ -102,13 +108,13 @@ static veo_thr_ctxt *_veo_context_open(struct veo_proc_handle *proc)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
         if (++retry_count >= MAX_RETRIES) {
-            spdlog::error("[VH] cannot connect to worker on VE");
+            spdlog::error("Cannot connect to worker on VE");
 
             return NULL;
         }
     }
 
-    spdlog::debug("[VH] connected to worker on VE");
+    spdlog::debug("Connected to worker on VE (PID {})", proc->pid);
 
     struct veo_thr_ctxt *ctx = new veo_thr_ctxt(proc, sock);
     ctx->comm_thread = std::thread(worker, ctx);
@@ -118,8 +124,12 @@ static veo_thr_ctxt *_veo_context_open(struct veo_proc_handle *proc)
 
 struct veo_proc_handle *veo_proc_create(int venode)
 {
-    // TODO call this in an __attribute__((constructor)) function?
-    spdlog::cfg::load_env_levels();
+    char *VEORUN_BIN_ENV = getenv("VEORUN_BIN");
+    const char *VEORUN_BIN = VEORUN_BIN_ENV
+                                 ? VEORUN_BIN_ENV
+                                 : "/opt/nec/ve/veos/libexec/stub-veorun";
+
+    spdlog::debug("Launching stub-veorun at {}", VEORUN_BIN);
 
     pid_t child_pid = fork();
 
@@ -129,6 +139,7 @@ struct veo_proc_handle *veo_proc_create(int venode)
         struct veo_thr_ctxt *ctx = _veo_context_open(proc);
 
         if (ctx == NULL) {
+            delete proc;
             return NULL;
         }
 
@@ -138,14 +149,11 @@ struct veo_proc_handle *veo_proc_create(int venode)
 
         return proc;
     } else {
-        char *VEORUN_BIN_ENV = getenv("VEORUN_BIN");
-        const char *VEORUN_BIN =
-            VEORUN_BIN_ENV ? VEORUN_BIN_ENV : "/opt/nec/ve/veos/libexec/stub-veorun";
         const char *argv[] = {VEORUN_BIN, NULL};
 
         execvp(VEORUN_BIN, const_cast<char *const *>(argv));
 
-        spdlog::error("[VH] failed to launch stub-veorun");
+        spdlog::error("Failed to launch stub-veorun");
 
         exit(-1);
     }
@@ -170,7 +178,7 @@ int veo_proc_destroy(struct veo_proc_handle *proc)
 
     ctx->submit_request({{"cmd", VS_CMD_QUIT}, {"reqid", reqid}});
 
-    spdlog::debug("[VH] Waiting for VE to quit");
+    spdlog::debug("Waiting for VE to quit");
 
     wait(NULL);
 
@@ -462,17 +470,17 @@ int veo_call_sync(struct veo_proc_handle *proc, uint64_t addr,
 int veo_call_wait_result(struct veo_thr_ctxt *ctx, uint64_t reqid,
                          uint64_t *retp)
 {
-    spdlog::debug("[VH] waiting for request {}", reqid);
+    spdlog::debug("Waiting for request {}", reqid);
 
     json result;
     if (!ctx->wait_result(reqid, result)) {
-        spdlog::error("[VH] context is not running");
+        spdlog::error("Context is not running");
         return VEO_COMMAND_ERROR;
     }
 
     *retp = result["result"];
 
-    spdlog::debug("[VH] request {} completed", reqid);
+    spdlog::debug("Request {} completed", reqid);
 
     // TODO return VEO_COMMAND_ERROR if symbol cannot be found
     // TODO return VEO_COMMAND_ERROR if reqid is invalid
@@ -484,13 +492,13 @@ int veo_call_wait_result(struct veo_thr_ctxt *ctx, uint64_t reqid,
 int veo_call_peek_result(struct veo_thr_ctxt *ctx, uint64_t reqid,
                          uint64_t *retp)
 {
-    spdlog::debug("[VH] peeking request {}", reqid);
+    spdlog::debug("Peeking request {}", reqid);
 
     json result;
     bool finished = ctx->peek_result(reqid, result);
 
     if (!finished) {
-        spdlog::debug("[VH] request {} is pending", reqid);
+        spdlog::debug("Request {} is pending", reqid);
 
         return VEO_COMMAND_UNFINISHED;
     }
