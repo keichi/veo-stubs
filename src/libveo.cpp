@@ -17,7 +17,6 @@
 extern "C" {
 
 static std::vector<veo_proc_handle *> procs;
-static std::unordered_map<veo_proc_handle *, veo_thr_ctxt *> ctxts;
 
 __attribute__((constructor)) void init()
 {
