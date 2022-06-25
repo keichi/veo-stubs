@@ -39,6 +39,7 @@ TEST_CASE("Create and close a thread context")
     REQUIRE(proc != NULL);
 
     struct veo_thr_ctxt *ctx = veo_context_open(proc);
+    REQUIRE(ctx != NULL);
 
     veo_context_close(ctx);
     veo_proc_destroy(proc);
@@ -70,6 +71,46 @@ TEST_CASE("Create and close mutliple thread contexts")
         REQUIRE(veo_num_contexts(proc) == REP - i - 1);
     }
 
+    veo_proc_destroy(proc);
+}
+
+TEST_CASE("Synchronize context")
+{
+    constexpr size_t REP = 10;
+
+    struct veo_proc_handle *proc = veo_proc_create(0);
+    REQUIRE(proc != NULL);
+
+    struct veo_thr_ctxt *ctx = veo_context_open(proc);
+    REQUIRE(ctx != NULL);
+
+    uint64_t handle = veo_load_library(proc, "./libvetest.so");
+    REQUIRE(handle > 0);
+
+    struct veo_args *argps[REP];
+    uint64_t reqids[REP];
+
+    for (int i = 0; i < REP; i++) {
+        argps[i] = veo_args_alloc();
+        veo_args_set_i32(argps[i], 0, i);
+        reqids[i] = veo_call_async_by_name(ctx, handle, "increment", argps[i]);
+        REQUIRE(reqids[i] > 0);
+    }
+
+    veo_context_sync(ctx);
+
+    for (int i = 0; i < REP; i++) {
+        uint64_t result;
+
+        REQUIRE(veo_call_peek_result(ctx, reqids[i], &result) ==
+                VEO_COMMAND_OK);
+        REQUIRE(result == i + 1);
+
+        veo_args_free(argps[i]);
+    }
+
+    veo_unload_library(proc, handle);
+    veo_context_close(ctx);
     veo_proc_destroy(proc);
 }
 

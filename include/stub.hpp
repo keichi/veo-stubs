@@ -31,6 +31,7 @@ enum veo_stubs_cmd {
     VS_CMD_ASYNC_WRITE_MEM,
     VS_CMD_OPEN_CONTEXT,
     VS_CMD_CLOSE_CONTEXT,
+    VS_CMD_SYNC_CONTEXT,
     VS_CMD_QUIT,
 };
 
@@ -58,11 +59,13 @@ struct veo_proc_handle {
     veo_proc_handle(int32_t venode, pid_t pid) : venode(venode), pid(pid) {}
 };
 
+// A single-producer, single-consumer queue
 template <typename T> class blocking_queue
 {
     std::queue<T> queue;
     std::mutex mtx;
     std::condition_variable cv_item;
+    std::condition_variable cv_empty;
 
 public:
     // Push an item
@@ -84,7 +87,15 @@ public:
         queue.pop();
 
         if (queue.empty()) {
+            cv_empty.notify_one();
         }
+    }
+
+    // Block until the queue becomes empty
+    void wait_empty()
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        cv_empty.wait(lock, [&] { return queue.empty(); });
     }
 };
 

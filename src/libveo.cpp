@@ -561,6 +561,15 @@ int veo_get_context_state(struct veo_thr_ctxt *ctx)
     return ctx->is_running ? VEO_STATE_RUNNING : VEO_STATE_EXIT;
 }
 
+void veo_context_sync(struct veo_thr_ctxt *ctx)
+{
+    uint64_t reqid = ctx->issue_reqid();
+    ctx->submit_request({{"cmd", VS_CMD_SYNC_CONTEXT}, {"reqid", reqid}});
+
+    uint64_t result;
+    veo_call_wait_result(ctx, reqid, &result);
+}
+
 struct veo_args *veo_args_alloc(void) { return new veo_args; }
 
 void veo_args_free(struct veo_args *ca) { delete ca; }

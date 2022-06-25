@@ -238,6 +238,11 @@ static void handle_async_write_mem(int sock, const json &req)
     send_msg(sock, {{"result", 0}, {"reqid", req["reqid"]}});
 }
 
+static void handle_sync_context(int sock, const json &req)
+{
+    send_msg(sock, {{"result", 0}, {"reqid", req["reqid"]}});
+}
+
 static void handle_quit(int sock, json req) {}
 
 static void close_server_sock(int server_sock)
@@ -301,6 +306,9 @@ static void worker(int server_sock, int worker_sock)
             break;
         case VS_CMD_CLOSE_CONTEXT:
             active = false;
+            break;
+        case VS_CMD_SYNC_CONTEXT:
+            handle_sync_context(worker_sock, req);
             break;
         case VS_CMD_QUIT:
             handle_quit(worker_sock, req);

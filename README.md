@@ -68,7 +68,7 @@ This will dump every message exchanged between the application and
 - [x] `veo_write_mem`
 - [x] `veo_context_open`
 - [x] `veo_context_close`
-- [ ] `veo_context_sync`
+- [x] `veo_context_sync`
 - [x] `veo_num_contexts`
 - [x] `veo_get_context`
 - [x] `veo_call_sync`
