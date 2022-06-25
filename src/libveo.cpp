@@ -18,7 +18,7 @@ extern "C" {
 
 static std::vector<veo_proc_handle *> procs;
 
-__attribute__((constructor)) void init()
+static __attribute__((constructor)) void init()
 {
     spdlog::cfg::load_env_levels();
     spdlog::set_pattern("[%^%l%$] [VH] [PID %P] [TID %t] %v");
@@ -123,7 +123,7 @@ static veo_thr_ctxt *_veo_context_open(struct veo_proc_handle *proc)
 
 struct veo_proc_handle *veo_proc_create(int venode)
 {
-    char *VEORUN_BIN_ENV = getenv("VEORUN_BIN");
+    const char *VEORUN_BIN_ENV = getenv("VEORUN_BIN");
     const char *VEORUN_BIN = VEORUN_BIN_ENV
                                  ? VEORUN_BIN_ENV
                                  : "/opt/nec/ve/veos/libexec/stub-veorun";
@@ -167,7 +167,7 @@ struct veo_proc_handle *veo_proc_create_static(int venode, char *tmp_veobin)
 int veo_proc_destroy(struct veo_proc_handle *proc)
 {
     // Close all open thread contexts
-    std::vector<struct veo_thr_ctxt *> ctxts = proc->contexts;
+    const std::vector<struct veo_thr_ctxt *> ctxts = proc->contexts;
     for (auto ctx : ctxts) {
         veo_context_close(ctx);
     }

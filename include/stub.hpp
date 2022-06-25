@@ -62,24 +62,29 @@ template <typename T> class blocking_queue
 {
     std::queue<T> queue;
     std::mutex mtx;
-    std::condition_variable cv;
+    std::condition_variable cv_item;
 
 public:
-    void push(const T &elem)
+    // Push an item
+    void push(const T &item)
     {
         std::lock_guard<std::mutex> lock(mtx);
 
-        queue.push(elem);
-        cv.notify_one();
+        queue.push(item);
+        cv_item.notify_one();
     }
 
-    void wait_pop(T &elem)
+    // Blocking pop an item
+    void wait_pop(T &item)
     {
         std::unique_lock<std::mutex> lock(mtx);
-        cv.wait(lock, [&] { return !queue.empty(); });
+        cv_item.wait(lock, [&] { return !queue.empty(); });
 
-        elem = queue.front();
+        item = queue.front();
         queue.pop();
+
+        if (queue.empty()) {
+        }
     }
 };
 
@@ -91,7 +96,7 @@ struct veo_thr_ctxt {
     std::atomic<bool> is_running;
 
     blocking_queue<json> requests;
-    uint64_t num_reqs;
+    std::atomic<uint64_t> num_reqs;
 
     std::unordered_map<uint64_t, json> results;
     std::mutex results_mtx;
@@ -104,38 +109,37 @@ struct veo_thr_ctxt {
 
     uint64_t issue_reqid() { return num_reqs++; }
 
-    void submit_request(json request) { this->requests.push(request); }
+    void submit_request(json request) { requests.push(request); }
 
     bool wait_result(uint64_t reqid, json &result)
     {
-        std::unique_lock<std::mutex> lock(this->results_mtx);
+        std::unique_lock<std::mutex> lock(results_mtx);
 
-        this->results_cv.wait(lock, [=] {
-            return this->results.find(reqid) != this->results.end() ||
-                   !this->is_running;
+        results_cv.wait(lock, [=] {
+            return results.find(reqid) != results.end() || !is_running;
         });
 
         // this means comm_thread exited
-        if (this->results.find(reqid) == this->results.end()) {
+        if (results.find(reqid) == results.end()) {
             return false;
         }
 
-        result = this->results.at(reqid);
-        this->results.erase(reqid);
+        result = results.at(reqid);
+        results.erase(reqid);
 
         return true;
     }
 
     bool peek_result(uint64_t reqid, json &result)
     {
-        std::lock_guard<std::mutex> lock(this->results_mtx);
+        std::lock_guard<std::mutex> lock(results_mtx);
 
-        if (this->results.find(reqid) == this->results.end()) {
+        if (results.find(reqid) == results.end()) {
             return false;
         }
 
-        result = this->results.at(reqid);
-        this->results.erase(reqid);
+        result = results.at(reqid);
+        results.erase(reqid);
 
         return true;
     }
